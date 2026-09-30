@@ -7,6 +7,10 @@
 - **One window for metadata fields.** The **Metadata** button now picks both which metadata fields show as table columns (**Show**) and which can be used at export (**Export**), replacing the separate **Set Export Metadata** button. **Tick both together** sets both with one click, header boxes tick every row in view, **GenBank-ready** and **Ticked only** narrow the list, sample counts show gaps (for example `12/20`), and a click copies a field's template text. **Choose fields** in Export Data opens the same window filtered to that source.
 - **Copy sequence in the sequence viewers.** The Annotate sequence viewer and the MapToRef coverage viewer have a **Copy sequence** button that copies the bases currently in view as FASTA, at any zoom level (letters need not be showing). In MapToRef, the reference and consensus are copied as two records.
 
+## Changes
+
+- The export's `sample_info.csv` has a new `ref_accession` column holding just the GenBank reference accession (blank when the reference was flagged as poor). It replaces the `ref_comparison` column and its "compared sample ... to GenBank accession ..." sentence.
+
 # MitoPilot 1.5.8
 
 Released 2026-09-29. Container: `macguigand/mitopilot:1.5.8`
