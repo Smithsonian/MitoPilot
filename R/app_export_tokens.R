@@ -4,6 +4,18 @@ EXPORT_TOKEN_REFERENCE <- c("blast_accession", "blast_ref_status", "blast_specie
 EXPORT_TOKEN_ASSEMBLY <- c("length", "structure", "PCGCount", "tRNACount", "rRNACount", "ORFCount",
                            "missing", "extra", "warnings", "partial", "curate_opts")
 
+#' Header-template text a metadata key inserts: `{col}`, or `[label={col}]` for
+#' combos that are not plain
+#' @noRd
+meta_export_token <- function(keys) {
+  vapply(keys, function(k) {
+    col <- .meta_key_col(k)
+    p <- strsplit(k, ":", fixed = TRUE)[[1]]
+    if (p[2] != "combo" || isTRUE(.meta_combos(p[1])[[p[3]]]$plain)) paste0("{", col, "}")
+    else paste0("[", p[3], "={", col, "}]")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 #' Group the columns usable in a header template for the Export Data modal
 #'
 #' @param data rows about to be exported (first row supplies the hover example;
@@ -43,16 +55,13 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
     keys <- keys[keep]
     cols <- cols[keep]
     ticked <- if (length(cols)) {
-      combo <- grepl(":combo:", keys, fixed = TRUE)
-      label <- sub("^[^:]+:combo:", "", keys)
-      combo <- combo & !vapply(label, function(l) isTRUE(.meta_combos(prefix)[[l]]$plain), logical(1))
-      tok(cols, ifelse(combo, paste0("[", label, "={", cols, "}]"), paste0("{", cols, "}")))
+      tok(cols, meta_export_token(keys))
     } else {
       tok(character(), character())
     }
     list(tokens = rbind(plain(id_col), ticked), n = nrow(ticked))
   }
-  pick_hint <- "Nothing ticked yet. Use Set Export Metadata in the Export toolbar to add fields."
+  pick_hint <- "Nothing ticked yet. Use Choose fields, or the Export column of the Metadata button."
   csv <- setdiff(export_metadata_cols(sample_cols, character()), EXPORT_TOKEN_BASICS)
   geome <- meta("geome", "GEOME_BCID")
   gbif <- meta("gbif", "GBIF_ID")

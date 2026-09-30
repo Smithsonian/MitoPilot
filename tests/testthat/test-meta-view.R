@@ -95,3 +95,47 @@ test_that("showing source fields on an empty table does not crash", {
   expect_equal(nrow(out), 0L)
   expect_equal(nrow(meta_export_cols(con, ids = character(), keys = "ncbi:combo:sex")), 0L)
 })
+
+test_that("meta_view_fields carries export state, sample totals, and template text", {
+  con <- meta_view_db()
+  on.exit(DBI::dbDisconnect(con))
+  .meta_save_fields(con, "gbif:raw:Occurrence:sex")
+  f <- meta_view_fields(con)
+  expect_true(all(f$n_total == 2L))
+  expect_true(is.na(f$export[f$key == "map:country"]))
+  expect_true(f$export[f$key == "gbif:raw:Occurrence:sex"])
+  expect_equal(f$token[f$key == "map:country"], "{country}")
+  expect_equal(f$token[f$key == "gbif:raw:Occurrence:sex"], "{gbif_Occurrence_sex}")
+  expect_true(meta_view_link(con))
+})
+
+test_that("meta_view_save writes export keys and the link option, keeping unlisted keys", {
+  con <- meta_view_db()
+  on.exit(DBI::dbDisconnect(con))
+  .meta_save_fields(con, c("ncbi:combo:lat_lon", "gbif:raw:Occurrence:sex"))
+  f <- meta_view_fields(con)
+  meta_view_save(con, f, "map:country", wrap = FALSE,
+                 export_keys = c("geome:raw:Event:locality", "map:country"), link = FALSE)
+  ex <- DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key
+  expect_setequal(ex, c("ncbi:combo:lat_lon", "geome:raw:Event:locality"))
+  expect_false(meta_view_link(con))
+  expect_false(meta_view_wrap(con))
+  meta_view_save(con, f, character(0), wrap = TRUE)
+  expect_false(meta_view_link(con))
+  expect_setequal(DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key,
+                  c("ncbi:combo:lat_lon", "geome:raw:Event:locality"))
+})
+
+test_that("meta_view_modal has Show/Export controls and the picker table renders", {
+  con <- meta_view_db()
+  on.exit(DBI::dbDisconnect(con))
+  f <- meta_view_fields(con)
+  html <- as.character(meta_view_modal(shiny::NS("x"), f, wrap = FALSE, source = "GBIF",
+                                       closed_input = "x-meta_view_closed"))
+  expect_match(html, "Tick both together", fixed = TRUE)
+  expect_match(html, "GenBank-ready", fixed = TRUE)
+  expect_match(html, "\"source\":\"GBIF\"", fixed = TRUE)
+  expect_match(html, "x-meta_view_closed", fixed = TRUE)
+  expect_match(html, "mpMV.save(&#39;x-meta_view_tbl&#39;, &#39;x-meta_view_state&#39;)", fixed = TRUE)
+  expect_s3_class(meta_view_picker_table(f, "x-meta_view_tbl"), "reactable")
+})

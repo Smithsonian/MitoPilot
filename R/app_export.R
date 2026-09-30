@@ -114,7 +114,7 @@ export_server <- function(id) {
 
     specimen_viewer_server("specimen", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_export"))
-    meta_view_setup(input, output, session)
+    meta_view_open <- meta_view_setup(input, output, session)
     fetch_data <- function() meta_view_join(fetch_export_data(), session$userData$con)
 
     # Prepare data ----
@@ -220,68 +220,25 @@ export_server <- function(id) {
     # stop re-rendering it after the first pass.
     outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
-    meta_fields_ver <- reactiveVal(0L)
-
-    # Specimen field picker ----
-    raw_fields_table <- function(raw) {
-      reactable::reactable(
-        raw[, c("level", "field", "n_samples", "example", "col")],
-        selection = "multiple", onClick = "select", compact = TRUE, searchable = TRUE,
-        defaultSelected = which(raw$selected), defaultPageSize = 10,
-        columns = list(
-          level = colDef(name = "Level"), field = colDef(name = "Field"),
-          n_samples = colDef(name = "Samples", width = 80),
-          example = colDef(name = "Example", cell = rt_longtext(), html = TRUE),
-          col = colDef(name = "Template token", cell = function(v) paste0("{", v, "}"))
-        )
-      )
-    }
-    init("specimen_fields")
     # Choose fields in Export Data: keep what is on screen, so closing the
-    # fields modal can reopen Export Data as it was.
-    snap_export <- function() {
+    # Metadata modal can reopen Export Data as it was.
+    snap_export <- function(source) {
       rv$export_snap <- lapply(stats::setNames(nm = c(
         "export_group", "template_select", "fasta_header", "fasta_header_gene",
         "include_alignments", "export_genes", "review_outliers", "start_aa",
         "stop_aa", "ident_pct")), function(id) input[[id]])
-      trigger("specimen_fields")
+      meta_view_open(source, closed_input = ns("meta_view_closed"))
     }
-    observeEvent(input$token_fields_geome, snap_export())
-    observeEvent(input$token_fields_gbif, snap_export())
-    observeEvent(input$token_fields_ncbi, snap_export())
-    observeEvent(input$specimen_fields_closed, {
+    observeEvent(input$token_fields_geome, snap_export("GEOME"))
+    observeEvent(input$token_fields_gbif, snap_export("GBIF"))
+    observeEvent(input$token_fields_ncbi, snap_export("NCBI"))
+    observeEvent(input$meta_view_closed, {
       req(rv$export_snap)
       trigger("export")
-    })
-    on("specimen_fields", {
-      con <- session$userData$con
-      sm <- lapply(stats::setNames(nm = names(META_SOURCES)), function(s) meta_field_summary(con, s))
-      closed <- if (!is.null(rv$export_snap)) ns("specimen_fields_closed")
-      showModal(specimen_fields_modal(ns, sm, closed_input = closed))
-      for (s in names(sm)) local({
-        src <- s
-        output[[paste0(tolower(src), "_raw")]] <- reactable::renderReactable(
-          raw_fields_table(sm[[src]][sm[[src]]$kind == "raw", ]))
-      })
-    })
-
-    observeEvent(input$specimen_fields_save, {
-      con <- session$userData$con
-      picked <- unlist(lapply(names(META_SOURCES), function(src) {
-        s <- meta_field_summary(con, src)
-        raw <- s[s$kind == "raw", ]
-        raw$key[reactable::getReactableState(paste0(tolower(src), "_raw"), "selected") %||% integer(0)]
-      }))
-      combos <- unlist(lapply(names(META_SOURCES), function(s) input[[paste0(tolower(s), "_combos")]]))
-      .meta_save_fields(con, c(combos, picked))
-      removeModal()
-      meta_fields_ver(meta_fields_ver() + 1L)
-      rv$data <- fetch_data()
     })
 
     # Render table ----
     output$table <- reactable::renderReactable({
-      meta_fields_ver()
       meta_ver()
       meta_cols <- meta_view_table_defs(session$userData$con, isolate(rv$data))
       reactable::reactable(

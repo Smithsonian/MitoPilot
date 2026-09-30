@@ -53,27 +53,6 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
   })
 })
 
-test_that("specimen_fields_modal has a GEOME and a GBIF section", {
-  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-  on.exit(DBI::dbDisconnect(con))
-  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
-  .meta_ensure_tables(con)
-  DBI::dbAppendTable(con, "meta_records", data.frame(
-    ID = "s1", source = c("GEOME", "GBIF"), level = c("Event", "Occurrence"), depth = 0L,
-    ref = "r", field = c("country", "countryCode"), value = c("Peru", "PE")))
-  .meta_save_fields(con, c("geome:combo:lat_lon", "gbif:combo:sex"))
-  html <- as.character(specimen_fields_modal(NS("exp"), list(GEOME = meta_field_summary(con, "GEOME"),
-                                                             GBIF = meta_field_summary(con, "GBIF"))))
-  expect_match(html, "Metadata fields for export", fixed = TRUE)
-  expect_match(html, "exp-geome_combos", fixed = TRUE)
-  expect_match(html, "exp-gbif_combos", fixed = TRUE)
-  expect_match(html, "exp-geome_raw", fixed = TRUE)
-  expect_match(html, "exp-gbif_raw", fixed = TRUE)
-  expect_match(html, "{gbif_specimen_voucher}", fixed = TRUE)
-  expect_match(html, "value=\"gbif:combo:sex\" checked", fixed = TRUE)
-  expect_lt(regexpr("exp-geome_combos", html), regexpr("exp-gbif_combos", html))
-})
-
 status_db <- function() {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   DBI::dbWriteTable(con, "samples", data.frame(
@@ -268,17 +247,6 @@ test_that("specimen_status and the column renderer know the NCBI source", {
   expect_match(as.character(rt_specimen("x")), "ncbi_helix.png", fixed = TRUE)
   expect_equal(meta_view_logo("NCBI")$attribs$class, "mp-meta-logo mp-meta-logo-ncbi")
   expect_true(file.exists(app_sys("app", "www", "specimen", "ncbi_helix.png")))
-})
-
-test_that("specimen_fields_modal has a section per source", {
-  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-  on.exit(DBI::dbDisconnect(con))
-  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
-  .meta_ensure_tables(con)
-  sm <- lapply(stats::setNames(nm = names(META_SOURCES)), function(s) meta_field_summary(con, s))
-  html <- as.character(specimen_fields_modal(shiny::NS("x"), sm))
-  for (s in c("GEOME", "GBIF", "NCBI")) expect_match(html, paste0("<h4>", s, "</h4>"), fixed = TRUE)
-  expect_match(html, "x-ncbi_combos", fixed = TRUE)
 })
 
 test_that("meta_record_view links NCBI levels in SRA, BioSample, BioProject order", {
