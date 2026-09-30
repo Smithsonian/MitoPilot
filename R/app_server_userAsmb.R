@@ -208,9 +208,6 @@ app_server_userAsmb <- function(input, output, session) {
   observeEvent(input$clear_group, {
     trigger("clear_group")
   })
-  observeEvent(input$specimen_fields, {
-    trigger("specimen_fields")
-  })
   observeEvent(input$export, {
     trigger("export")
   })

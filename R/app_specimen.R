@@ -244,48 +244,6 @@ specimen_csv_map_ui <- function(ns, current, overrides, choices) {
   )
 }
 
-#' Modal listing each source's fields available at export
-#'
-#' @param ns module namespace function
-#' @param summaries named list of `meta_field_summary()` output, one per source
-#' @param closed_input namespaced input id set when the modal closes, however
-#'   it closes; NULL to skip
-#' @noRd
-specimen_fields_modal <- function(ns, summaries, closed_input = NULL) {
-  section <- function(source, s) {
-    key <- tolower(source)
-    combos <- s[s$kind == "combo", ]
-    tagList(
-      h4(source),
-      h5("GenBank-ready combinations"),
-      checkboxGroupInput(
-        ns(paste0(key, "_combos")), NULL, width = "100%",
-        choiceValues = combos$key, selected = combos$key[combos$selected],
-        choiceNames = lapply(seq_len(nrow(combos)), function(i) tagList(
-          code(paste0("{", combos$col[i], "}")), " from ", combos$field[i], ": ",
-          if (is.na(combos$example[i])) em("no samples") else
-            tagList(tags$samp(combos$example[i]), sprintf(" (%d samples)", combos$n_samples[i]))
-        ))
-      ),
-      h5(paste("All", source, "fields")),
-      reactable::reactableOutput(ns(paste0(key, "_raw")))
-    )
-  }
-  modalDialog(
-    title = mp_modal_title("Metadata fields for export",
-                           "Ticked fields become columns you can use in header templates"),
-    size = "l", easyClose = TRUE,
-    lapply(seq_along(summaries), function(i) tagList(
-      if (i > 1) tags$hr(), section(names(summaries)[i], summaries[[i]]))),
-    if (!is.null(closed_input)) {
-      tags$script(HTML(sprintf(
-        "$('#shiny-modal').one('hidden.bs.modal', function() { Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); });",
-        closed_input)))
-    },
-    footer = mp_footer(primary = actionButton(ns("specimen_fields_save"), "Save"), dismiss = "Cancel")
-  )
-}
-
 #' Specimen metadata viewer: GEOME, GBIF, NCBI, and Compare tabs
 #'
 #' @param id module id

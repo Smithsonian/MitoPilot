@@ -454,6 +454,11 @@ details summary:hover {
    820px (and at 400% zoom) Bootstrap's fluid width takes over, so a dialog
    never forces horizontal panning. */
 @media (min-width: 820px) {
+  .modal-xl {
+    width: 92% !important;
+    max-width: 1500px !important;
+  }
+
   .modal-lg {
     width: auto !important;
     min-width: 800px !important;
@@ -1013,3 +1018,14 @@ a.mp-link:focus-visible {
 .mp-spec-link .checkbox, .mp-spec-link .form-group { margin: 0; }
 .mp-spec-tabs { position: relative; }
 .mp-spec-filter { position: absolute; top: 4px; right: 15px; width: 200px; z-index: 2; }
+
+/* Metadata modal: Show and Export tick columns */
+.mp-mv-head { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: 600; cursor: pointer; }
+.mp-mv-head input { margin: 0; }
+.mp-mv-na { color: var(--bs-secondary-color, #888); font-size: 0.85em; }
+.mp-mv-partial { color: #c46a00; font-weight: 600; }
+.mp-mv-token { cursor: copy; white-space: normal; overflow-wrap: anywhere; }
+.mp-mv-copied { outline: 2px solid #3c9d4a; }
+.mp-mv-link { font-weight: normal; margin: 0; }
+.mp-mv-toggle.active { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2); font-weight: 600; }
+.mp-mv-count { margin-right: auto; }
