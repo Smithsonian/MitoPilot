@@ -91,8 +91,8 @@ test_that("meta_field_summary lists GEOME combos and raw fields with counts", {
   expect_true(all(paste0("geome:combo:", names(GEOME_COMBOS)) %in% s$key))
 })
 
-test_that("export_metadata_cols treats GEOME_BCID as owned", {
-  expect_equal(export_metadata_cols(c("ID", "Taxon", "GEOME_BCID", "site"), character()), "site")
+test_that("export_metadata_cols lists GEOME_BCID as a map file column", {
+  expect_equal(export_metadata_cols(c("ID", "Taxon", "GEOME_BCID", "site"), character()), c("GEOME_BCID", "site"))
 })
 
 test_that(".meta_join adds ticked columns and is a no-op otherwise", {

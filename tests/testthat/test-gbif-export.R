@@ -90,6 +90,6 @@ test_that("ticked GBIF keys join as gbif_ columns and appear in the field summar
   expect_false(any(grepl("^geome:", s$key)))
 })
 
-test_that("export_metadata_cols treats GBIF_ID as owned", {
-  expect_equal(export_metadata_cols(c("ID", "Taxon", "GBIF_ID", "GEOME_BCID", "site"), character()), "site")
+test_that("export_metadata_cols lists GBIF_ID as a map file column", {
+  expect_equal(export_metadata_cols(c("ID", "Taxon", "GBIF_ID", "GEOME_BCID", "site"), character()), c("GBIF_ID", "GEOME_BCID", "site"))
 })
