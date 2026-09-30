@@ -53,7 +53,7 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
     list(tokens = rbind(plain(id_col), ticked), n = nrow(ticked))
   }
   pick_hint <- "Nothing ticked yet. Use Set Export Metadata in the Export toolbar to add fields."
-  csv <- setdiff(export_metadata_cols(sample_cols, character()), c(EXPORT_TOKEN_BASICS, "GEOME_BCID", "GBIF_ID", "BioSample"))
+  csv <- setdiff(export_metadata_cols(sample_cols, character()), EXPORT_TOKEN_BASICS)
   geome <- meta("geome", "GEOME_BCID")
   gbif <- meta("gbif", "GBIF_ID")
   ncbi <- meta("ncbi", "BioSample")
