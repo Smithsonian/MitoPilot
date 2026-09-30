@@ -210,6 +210,31 @@
     return { pos: p, base: this.seq.charAt(p - 1) || 'N' };
   };
 
+  // The bases in view as FASTA, header ">unit:start-end", 60 per line; a
+  // consensus row, when present, follows as a second record.
+  Viewer.prototype.visibleFasta = function () {
+    var a = Math.ceil(this.viewStart), b = Math.floor(this.viewStart + this.viewLen());
+    if (this.topology === 'linear') { a = Math.max(1, a); b = Math.min(this.len, b); }
+    var ps = [];
+    for (var lin = a; lin <= b; lin++) { var bp = this.baseAt(lin); if (bp) ps.push(bp.pos); }
+    if (!ps.length) return { n: 0, text: '' };
+    var rng = ':' + ps[0] + '-' + ps[ps.length - 1];
+    var rec = function (name, seq) {
+      var s = ps.map(function (p) { return seq.charAt(p - 1) || 'N'; }).join('');
+      return '>' + name + rng + '\n' + (s.match(/.{1,60}/g) || []).join('\n') + '\n';
+    };
+    var text = this.seq2 ? rec(this.unit + ' ' + this.seqLabel, this.seq) + rec(this.unit + ' ' + this.seq2Label, this.seq2)
+                         : rec(this.unit, this.seq);
+    return { n: ps.length, text: text };
+  };
+  // Plain http off localhost has no Clipboard API, so fall back to a textarea.
+  function copyText(t) {
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(t); return; }
+    var a = document.createElement('textarea'); a.value = t; a.style.position = 'fixed'; a.style.opacity = '0';
+    document.body.appendChild(a); a.select();
+    try { document.execCommand('copy'); } finally { document.body.removeChild(a); }
+  }
+
   // ---- drawing ----
   Viewer.prototype.covOn = function () { return this.showCov && !!this.depth; };
   Viewer.prototype.errOn = function () { return this.showErr && !!this.err; };
@@ -600,6 +625,12 @@
         var a = btn.getAttribute('data-mpseq');
         if (a === 'zoom_in') self.zoom(2); else if (a === 'zoom_out') self.zoom(0.5);
         else if (a === 'whole') self.whole(); else if (a === 'fit' && self.selected !== null) self.fit(self.selected);
+        else if (a === 'copy') {
+          var f = self.visibleFasta(); if (!f.n) return;
+          copyText(f.text);
+          var old = btn.textContent; btn.textContent = 'Copied ' + f.n.toLocaleString() + ' bp';
+          setTimeout(function () { btn.textContent = old; }, 1500);
+        }
       });
     });
     var go = document.getElementById(prefix + '-goto');
@@ -643,6 +674,7 @@
              readsPanelH: v.readsCanvas ? (v.readsWrap.hidden ? 0 : parseInt(v.readsCanvas.style.height, 10) || 0) : null,
              nLanes: v.nLanes, features: v.feats.map(function (f) { return { row: f.row, gene: f.gene, pos1: f.pos1, pos2: f.pos2, lane: f.lane }; }) };
   };
+  window.mpseq.fasta = function (id) { var v = get(id); return v ? v.visibleFasta() : null; };
   window.mpseq.zoom = function (id, f) { var v = get(id); if (v) v.zoom(f); };
   window.mpseq.fit = function (id, row) { var v = get(id); if (v) v.fit(row); };
   window.mpseq.whole = function (id) { var v = get(id); if (v) v.whole(); };

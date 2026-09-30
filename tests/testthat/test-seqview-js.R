@@ -396,3 +396,30 @@ test_that("a reads panel takes the lanes out of the main canvas and sizes itself
   expect_equal(s$rows, 2)
   expect_null(s$mainHit)
 })
+
+test_that("copy returns only the bases in view, wrapping on a circular unit", {
+  b <- sv_page()
+  r <- js(b, "(function(){
+    var seq = Array(2000).join('ACGT').slice(0, 2000), seq2 = seq.slice(0, 999) + 'N' + seq.slice(1000);
+    var base = {id:'sv-canvas', unit:'S1', len:2000, topology:'linear', seq:seq, version:1, selected:null, features:[]};
+    window.__handlers.mpseq(base); window.mpseq.goto('sv-canvas', 1000);
+    var lin = window.mpseq.fasta('sv-canvas');
+    window.mpseq.whole('sv-canvas'); var all = window.mpseq.fasta('sv-canvas');
+    window.__handlers.mpseq(Object.assign({}, base, {topology:'circular', version:2})); window.mpseq.goto('sv-canvas', 1);
+    var circ = window.mpseq.fasta('sv-canvas');
+    window.__handlers.mpseq(Object.assign({seq2:seq2, seqLabel:'Reference', seq2Label:'Consensus'}, base, {version:3}));
+    window.mpseq.goto('sv-canvas', 1000); var two = window.mpseq.fasta('sv-canvas');
+    return JSON.stringify({lin:lin, all:all.n, circ:circ.text.split('\\n')[0], circN:circ.n, two:two.text});})()")
+  s <- jsonlite::fromJSON(r)
+  expect_equal(s$all, 2000)
+  expect_lt(s$lin$n, 200)
+  hdr <- strsplit(s$lin$text, "\n")[[1]]
+  rng <- as.integer(strsplit(sub("^>S1:", "", hdr[1]), "-")[[1]])
+  expect_equal(diff(rng) + 1L, s$lin$n)
+  expect_equal(paste(hdr[-1], collapse = ""), substr(strrep("ACGT", 500), rng[1], rng[2]))
+  expect_true(all(nchar(hdr[-1]) <= 60))
+  # centred on 1 the circular view runs from the end of the sequence into its start
+  expect_match(s$circ, "^>S1:19[0-9]{2}-[0-9]{1,2}$")
+  expect_match(s$two, ">S1 Reference:.*>S1 Consensus:")
+  expect_match(sub("^.*Consensus[^\n]*\n", "", s$two), "N")
+})
