@@ -256,14 +256,14 @@ mark_tbl_3p <- function(pos) {
   pos
 }
 
-#' Sentence naming the GenBank reference a sample's annotation was checked against
+#' GenBank reference accession a sample's annotation was checked against
 #'
 #' Empty when there is no usable reference or it was flagged poor or failed.
 #' @noRd
-ref_comparison_note <- function(id, acc, poor = NA) {
+usable_ref_accession <- function(acc, poor = NA) {
   usable <- length(acc) == 1 && !is.na(acc) && nzchar(acc) && acc != "NO HIT" &&
     !isTRUE(poor %in% c("poor", "failed"))
-  if (usable) paste0("compared sample ", id, " to GenBank accession ", acc) else ""
+  if (usable) acc else ""
 }
 
 
@@ -291,9 +291,9 @@ ref_comparison_note <- function(id, acc, poor = NA) {
 #'   [flag_PCG_outliers()]. Default 60.
 #' @param summary_csv Write a per-sample summary CSV (organism, topology,
 #'   completeness, gene counts, reference, etc.) into the export directory?
-#'   Its `ref_comparison` column reads "compared sample <ID> to GenBank
-#'   accession <accession>" for every sample whose reference was not flagged
-#'   poor; GenBank no longer wants this in the FASTA header. (default: TRUE)
+#'   Its `ref_accession` column holds the GenBank reference accession for
+#'   every sample whose reference was not flagged poor; GenBank no longer
+#'   wants this in the FASTA header. (default: TRUE)
 #'
 #' @return Invisibly, the list returned by [flag_PCG_outliers()] when `review`
 #'   is TRUE (and a group of >1 sample is exported), otherwise `NULL`.
@@ -1323,17 +1323,16 @@ export_files <- function(
     summary_df <- fetch_export_data(con = con, locked_only = FALSE) |>
       dplyr::semi_join(units, by = c("ID", "path", "scaffold"))
     # Reference resolved per unit via the same helper the synteny view and both
-    # tables use, so the sentence names the reference the user was shown.
-    summary_df$ref_comparison <- vapply(seq_len(nrow(summary_df)), function(i) {
-      ref_comparison_note(
-        summary_df$ID[i],
+    # tables use, so the column names the reference the user was shown.
+    summary_df$ref_accession <- vapply(seq_len(nrow(summary_df)), function(i) {
+      usable_ref_accession(
         resolve_unit_blast_ref(con, summary_df$ID[i], summary_df$path[i], summary_df$scaffold[i]),
         summary_df$poor_blast_ref[i]
       )
     }, character(1))
     summary_df <- summary_df |>
       dplyr::select(-dplyr::any_of(drop)) |>
-      dplyr::relocate(dplyr::any_of(c(core, "ref_comparison")))
+      dplyr::relocate(dplyr::any_of(c(core, "ref_accession")))
     summary_fn <- if (length(group) == 1) {
       file.path(group_pth, paste0(group, "_sample_info.csv"))
     } else {

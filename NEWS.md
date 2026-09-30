@@ -1,3 +1,9 @@
+# MitoPilot (development version)
+
+## Changes
+
+- The export's `sample_info.csv` has a new `ref_accession` column holding just the GenBank reference accession (blank when the reference was flagged as poor). It replaces the `ref_comparison` column and its "compared sample ... to GenBank accession ..." sentence.
+
 # MitoPilot 1.5.8
 
 Released 2026-09-29. Container: `macguigand/mitopilot:1.5.8`
