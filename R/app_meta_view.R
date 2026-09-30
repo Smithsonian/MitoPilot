@@ -110,7 +110,7 @@ meta_view_modal <- function(ns, fields, wrap, link = TRUE, source = NULL, closed
         tags$script(HTML(sprintf("mpMV.init(%s);", jsonlite::toJSON(list(
           tbl = tbl, show = fields$key[fields$shown],
           export = fields$key[fields$export %in% TRUE],
-          exportable = fields$key[!is.na(fields$export)],
+          exportable = fields$key[!is.na(fields$export)], always = sum(is.na(fields$export)),
           link = link, source = source %||% NA), auto_unbox = TRUE)))),
         reactable::reactableOutput(ns("meta_view_tbl"))
       )
