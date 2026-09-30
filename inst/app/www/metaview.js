@@ -5,7 +5,7 @@ window.mpMV = {
   init: function(o) {
     this.st[o.tbl] = {
       show: new Set([].concat(o.show || [])), export: new Set([].concat(o.export || [])),
-      exportable: new Set([].concat(o.exportable || [])), link: !!o.link, source: o.source
+      exportable: new Set([].concat(o.exportable || [])), always: o.always || 0, link: !!o.link, source: o.source
     };
     this.whenReady(o.tbl, function() {
       if (o.source) {
@@ -67,7 +67,7 @@ window.mpMV = {
       el.disabled = !elig.length;
     });
     var c = document.getElementById(tbl + '_count');
-    if (c) c.textContent = s.show.size + ' shown, ' + s.export.size + ' export';
+    if (c) c.textContent = s.show.size + ' shown, ' + (s.export.size + s.always) + ' export';
   },
   toggleSource: function(tbl, btn) {
     btn.classList.toggle('active');
