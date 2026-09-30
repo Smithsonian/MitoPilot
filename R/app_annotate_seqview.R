@@ -78,6 +78,7 @@ seqview_ui <- function(id) {
       btn("whole", "Whole genome"),
       btn("zoom_in", NULL, icon("magnifying-glass-plus"), "Zoom in"),
       btn("zoom_out", NULL, icon("magnifying-glass-minus"), "Zoom out"),
+      btn("copy", "Copy sequence", title = "Copy the bases in view as FASTA"),
       mp_checkbox(ns("show_cov"), label = "Coverage", value = TRUE),
       mp_checkbox(ns("show_err"), label = "Error rate", value = TRUE),
       mp_checkbox(ns("show_nt"), label = "Nucleotides", value = TRUE),
@@ -85,7 +86,7 @@ seqview_ui <- function(id) {
     ),
     div(class = "mp-coverage-caption",
         paste("Drag or scroll sideways to pan, scroll or pinch to zoom; click a gene to select its row.",
-              "Letters appear when zoomed in. Error rate bars turn orange above 5%.")),
+              "Letters appear when zoomed in. Copy sequence copies the bases in view. Error rate bars turn orange above 5%.")),
     uiOutput(ns("empty")),
     div(
       class = "mp-seqview",
