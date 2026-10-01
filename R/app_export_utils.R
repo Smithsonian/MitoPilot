@@ -208,6 +208,18 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
       }
       return(list(ok = TRUE, level = "warn", message = msg))
     }
+    if (!is.null(data) && nrow(data) > 0) {
+      hdr <- stringr::str_glue_data(data, template)
+      dm <- duplicate_modifiers(hdr)
+      hit <- lengths(dm) > 0
+      if (any(hit)) {
+        return(list(ok = TRUE, level = "warn", message = sprintf(
+          paste("Duplicate %s on %d of %d record(s) (%s). NCBI accepts each",
+                "modifier once: keep one and take the other out."),
+          paste0("[", unique(unlist(dm)), "=]", collapse = ", "), sum(hit), length(hit),
+          paste(utils::head((data$seqid %||% data$ID)[hit], 3), collapse = ", "))))
+      }
+    }
     if (require_completeness && !grepl("\\{completeness\\}\\s*$", template)) {
       return(list(
         ok = TRUE, level = "warn",
@@ -231,6 +243,16 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     }
     # Fallback: strip glue's multi-line wrapper to the last informative line
     err(sub("^.*!\\s*", "", gsub("\n", " ", raw)))
+  })
+}
+
+#' Names of the source modifiers used more than once in each header
+#' @noRd
+duplicate_modifiers <- function(headers) {
+  m <- regmatches(headers, gregexpr("\\[[^]=[]+=", headers))
+  lapply(m, function(x) {
+    nm <- gsub("[- ]", "_", tolower(trimws(substr(x, 2L, nchar(x) - 1L))))
+    unique(nm[duplicated(nm)])
   })
 }
 

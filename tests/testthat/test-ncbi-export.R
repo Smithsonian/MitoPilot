@@ -54,13 +54,29 @@ test_that("NCBI concept values split geo_loc_name", {
   expect_true(is.na(.ncbi_concept_value("locality", bs_recs(geo_loc_name = "Canada"))))
 })
 
-test_that("BioSample and BioProject chips insert plain tokens, not defline modifiers", {
+test_that("BioSample and BioProject chips insert BioSample/BioProject defline modifiers", {
   g <- export_token_groups(
     data.frame(ID = "s1", ncbi_biosample = "SAMN1", ncbi_lat_lon = "1 N 2 E"),
     c("ID", "Taxon"), c("ncbi:combo:biosample", "ncbi:combo:lat_lon"))
   ins <- unlist(lapply(g, function(x) x$tokens$insert))
-  expect_true("{ncbi_biosample}" %in% ins)
+  expect_true("[BioSample={ncbi_biosample}]" %in% ins)
   expect_true("[lat_lon={ncbi_lat_lon}]" %in% ins)
+  expect_equal(
+    meta_export_token(paste0("ncbi:combo:", c("biosample", "bioproject", "biosample_sra",
+                                              "bioproject_sra", "lat_lon"))),
+    c("[BioSample={ncbi_biosample}]", "[BioProject={ncbi_bioproject}]",
+      "[BioSample={ncbi_biosample_sra}]", "[BioProject={ncbi_bioproject_sra}]",
+      "[lat_lon={ncbi_lat_lon}]"))
+})
+
+test_that("SRA BioSample and BioProject combos read the SRA record", {
+  r <- rbind(bs_recs(accession = "SAMN1"),
+             data.frame(level = "SRA", depth = 0L, ref = "SRR1",
+                        field = c("biosample", "bioproject"), value = c("SAMN9", "PRJNA9")))
+  expect_equal(NCBI_COMBOS$biosample_sra$fn(r), "SAMN9")
+  expect_equal(NCBI_COMBOS$bioproject_sra$fn(r), "PRJNA9")
+  expect_true(is.na(NCBI_COMBOS$biosample_sra$fn(bs_recs(accession = "SAMN1"))))
+  expect_true(is.na(NCBI_COMBOS$bioproject_sra$fn(bs_recs(accession = "SAMN1"))))
 })
 
 test_that("missing text in either part of geo_loc_name is blank", {

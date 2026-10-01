@@ -499,11 +499,12 @@ empty value.
 | `ncbi_dev_stage` | `dev_stage` | lowercased |
 | `ncbi_biosample` | BioSample accession | `SAMN29555051` |
 | `ncbi_bioproject` | first BioProject accession | `PRJNA720393` |
+| `ncbi_biosample_sra` | the SRA record's `biosample` | `SAMN29555051` |
+| `ncbi_bioproject_sra` | the SRA record's `bioproject` | `PRJNA720393` |
 
-`ncbi_biosample` and `ncbi_bioproject` are not FASTA source modifiers, so their
-chips insert a plain column such as `{ncbi_biosample}`; use them in the sample
-summary or in your own notes. GenBank links a submission to its BioSample and
-BioProject in the submission form, not in the FASTA header.
+The BioSample and BioProject chips insert a `[BioSample=]` or `[BioProject=]`
+source modifier, for example `[BioSample={ncbi_biosample}]`. The `_sra` columns
+are filled only when the sample was linked through an SRA accession.
 
 Raw fields become columns named `geome_<Level>_<field>`,
 `gbif_<Level>_<field>`, or `ncbi_<Level>_<field>`, for example
