@@ -266,6 +266,17 @@ test_that("the compare view has an NCBI column", {
   expect_match(html, "<td>Canada</td>", fixed = TRUE)
 })
 
+test_that("the compare view flags coordinates that agree only after rounding", {
+  cf <- data.frame(ID = "s1", concept = "coordinates", csv_column = "lat_lon",
+                   csv_value = "28.54, -81.33", geome_value = NA,
+                   gbif_value = "28.53783 N 81.33322 W", ncbi_value = NA, status = "agree")
+  html <- as.character(specimen_compare_view(cf))
+  expect_match(html, "<td>agree (rounding)</td>", fixed = TRUE)
+  expect_match(html, "<td>28.53783 N 81.33322 W</td>", fixed = TRUE)
+  cf$csv_value <- "28.53783, -81.33322"
+  expect_match(as.character(specimen_compare_view(cf)), "<td>agree</td>", fixed = TRUE)
+})
+
 test_that("the viewer NCBI tab has an ID box", {
   con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
   on.exit(DBI::dbDisconnect(con))
