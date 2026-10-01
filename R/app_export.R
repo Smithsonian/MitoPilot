@@ -862,11 +862,15 @@ export_server <- function(id) {
       )
     }
 
+    group_data <- reactive({
+      g <- input$export_group
+      if (isTruthy(g)) rv$data[rv$data$export_group %in% g, , drop = FALSE] else rv$data
+    })
     output$fasta_header_status <- renderUI({
-      render_hdr_status(validate_fasta_header(hdr_main(), rv$data, require_completeness = TRUE))
+      render_hdr_status(validate_fasta_header(hdr_main(), group_data(), require_completeness = TRUE))
     })
     output$fasta_header_gene_status <- renderUI({
-      render_hdr_status(validate_fasta_header(hdr_gene(), rv$data))
+      render_hdr_status(validate_fasta_header(hdr_gene(), group_data()))
     })
 
     # Gears turn only while an export is actually running (T22).
