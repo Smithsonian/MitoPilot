@@ -210,15 +210,15 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     }
     if (!is.null(data) && nrow(data) > 0) {
       hdr <- stringr::str_glue_data(data, template)
-      dm <- duplicate_modifiers(hdr)
-      hit <- lengths(dm) > 0
-      if (any(hit)) {
+      dm <- unique(unlist(duplicate_modifiers(hdr)))
+      if (length(dm)) {
         return(list(ok = TRUE, level = "warn", message = sprintf(
-          paste("Duplicate %s on %d of %d record(s) (%s). NCBI accepts each",
-                "modifier once: keep one and take the other out."),
-          paste0("[", unique(unlist(dm)), "=]", collapse = ", "), sum(hit), length(hit),
-          paste(utils::head((data$seqid %||% data$ID)[hit], 3), collapse = ", "))))
+          paste("Duplicate %s. NCBI accepts each modifier once: keep one",
+                "and take the other out."),
+          paste0("[", dm, "=]", collapse = ", "))))
       }
+      mf <- missing_fields(template, data)
+      if (!is.null(mf)) return(list(ok = TRUE, level = "warn", message = mf))
     }
     if (require_completeness && !grepl("\\{completeness\\}\\s*$", template)) {
       return(list(
@@ -244,6 +244,26 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     # Fallback: strip glue's multi-line wrapper to the last informative line
     err(sub("^.*!\\s*", "", gsub("\n", " ", raw)))
   })
+}
+
+#' Message naming header columns that some samples leave empty, or NULL
+#' @noRd
+missing_fields <- function(template, data) {
+  tok <- regmatches(template, gregexpr("\\{[^{}]*\\}", template))[[1]]
+  nm <- intersect(unique(substr(tok, 2L, nchar(tok) - 1L)), names(data))
+  ids <- unique(data$ID)
+  out <- vapply(nm, function(n) {
+    v <- trimws(as.character(data[[n]]))
+    miss <- unique(data$ID[is.na(v) | !nzchar(v) | v == "NA"])
+    if (!length(miss)) return(NA_character_)
+    sprintf("{%s} for %d of %d sample(s) (%s)", n, length(miss), length(ids),
+            paste(utils::head(miss, 3), collapse = ", "))
+  }, character(1))
+  out <- out[!is.na(out)]
+  if (length(out)) {
+    paste0("Missing data in ", paste(out, collapse = "; "),
+           ". Fill in the column or take it out of the header.")
+  }
 }
 
 #' Names of the source modifiers used more than once in each header

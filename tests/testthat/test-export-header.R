@@ -97,7 +97,16 @@ test_that("a repeated source modifier warns but does not block", {
   res <- validate_fasta_header(tpl, multi_unit)
   expect_true(res$ok)
   expect_equal(res$level, "warn")
-  expect_match(res$message, "[organism=] on 3 of 3", fixed = TRUE)
+  expect_match(res$message, "Duplicate [organism=]. NCBI", fixed = TRUE)
   expect_equal(validate_fasta_header("{seqid} [organism={Taxon}] {completeness}", multi_unit)$level,
                "ok")
+})
+
+test_that("header columns some samples leave empty are flagged", {
+  d <- data.frame(ID = c("S1", "S2", "S3"), seqid = c("S1", "S2", "S3"),
+                  v = c("x", NA, " "), k = "ok")
+  res <- validate_fasta_header("{seqid} {k} {v}", d)
+  expect_equal(res$level, "warn")
+  expect_match(res$message, "Missing data in {v} for 2 of 3 sample(s) (S2, S3)", fixed = TRUE)
+  expect_equal(validate_fasta_header("{seqid} {k}", d)$level, "ok")
 })
