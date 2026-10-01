@@ -4,15 +4,15 @@ EXPORT_TOKEN_REFERENCE <- c("blast_accession", "blast_ref_status", "blast_specie
 EXPORT_TOKEN_ASSEMBLY <- c("length", "structure", "PCGCount", "tRNACount", "rRNACount", "ORFCount",
                            "missing", "extra", "warnings", "partial", "curate_opts")
 
-#' Header-template text a metadata key inserts: `{col}`, or `[label={col}]` for
-#' combos that are not plain
+#' Header-template text a metadata key inserts: `{col}` for a raw key, or
+#' `[mod={col}]` for a combo (mod defaults to the combo name)
 #' @noRd
 meta_export_token <- function(keys) {
   vapply(keys, function(k) {
     col <- .meta_key_col(k)
     p <- strsplit(k, ":", fixed = TRUE)[[1]]
-    if (p[2] != "combo" || isTRUE(.meta_combos(p[1])[[p[3]]]$plain)) paste0("{", col, "}")
-    else paste0("[", p[3], "={", col, "}]")
+    if (p[2] != "combo") paste0("{", col, "}")
+    else paste0("[", .meta_combos(p[1])[[p[3]]]$mod %||% p[3], "={", col, "}]")
   }, character(1), USE.NAMES = FALSE)
 }
 

@@ -33,7 +33,7 @@
   paste(la$txt, if (la$neg) "S" else "N", lo$txt, if (lo$neg) "W" else "E")
 }
 
-# biosample/bioproject are not GenBank defline modifiers, so their chips insert plain tokens
+# mod: defline modifier name when it differs from the combo name
 NCBI_COMBOS <- list(
   lat_lon = list(label = "lat_lon", sources = "lat_lon", fn = .ncbi_lat_lon),
   collection_date = .ncbi_passthrough("collection_date"),
@@ -46,10 +46,14 @@ NCBI_COMBOS <- list(
   identified_by = .ncbi_passthrough("identified_by"),
   sex = .ncbi_passthrough("sex", lower = TRUE),
   dev_stage = .ncbi_passthrough("dev_stage", lower = TRUE),
-  biosample = list(label = "biosample", sources = "accession", plain = TRUE,
+  biosample = list(label = "biosample", sources = "accession", mod = "BioSample",
                    fn = function(recs) .ncbi_val(recs, "accession")),
-  bioproject = list(label = "bioproject", sources = "accession", plain = TRUE,
-                    fn = function(recs) .ncbi_val(recs, "accession", level = "BioProject"))
+  bioproject = list(label = "bioproject", sources = "accession", mod = "BioProject",
+                    fn = function(recs) .ncbi_val(recs, "accession", level = "BioProject")),
+  biosample_sra = list(label = "biosample_sra", sources = "biosample", mod = "BioSample",
+                       fn = function(recs) .ncbi_val(recs, "biosample", level = "SRA")),
+  bioproject_sra = list(label = "bioproject_sra", sources = "bioproject", mod = "BioProject",
+                        fn = function(recs) .ncbi_val(recs, "bioproject", level = "SRA"))
 )
 
 .ncbi_concept_value <- function(concept, recs) {
