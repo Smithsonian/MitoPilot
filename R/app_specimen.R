@@ -193,13 +193,19 @@ specimen_compare_view <- function(cf) {
       r <- cf[i, ]
       cls <- if (identical(r$status, "conflict")) "mp-spec-conflict" else
         if (identical(r$status, "not checked")) "text-muted" else NULL
+      status <- r$status
+      if (identical(r$concept, "coordinates") && identical(status, "agree")) {
+        # agreement allows 0.01 degrees; flag values that are not identical
+        xy <- lapply(unlist(r[grep("_value$", names(r))]), .spec_parse_coords)
+        if (length(unique(Filter(Negate(is.null), xy))) > 1L) status <- "agree (rounding)"
+      }
       tags$tr(
         class = cls,
         tags$td(r$concept),
         tags$td(dash(r$csv_value),
                 if (!is.na(r$csv_column)) span(class = "text-muted", paste0(" (", r$csv_column, ")"))),
         lapply(names(META_SOURCES), function(s) tags$td(dash(r[[paste0(tolower(s), "_value")]]))),
-        tags$td(dash(r$status))
+        tags$td(dash(status))
       )
     }))
   )

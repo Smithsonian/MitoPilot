@@ -9,6 +9,7 @@
 
 ## Changes
 
+- In the metadata viewer's **Compare** tab, coordinates that match only within the 0.01 degree tolerance now show the status **agree (rounding)** instead of plain "agree". The values shown are always the original stored values.
 - The export's `sample_info.csv` has a new `ref_accession` column holding just the GenBank reference accession (blank when the reference was flagged as poor). It replaces the `ref_comparison` column and its "compared sample ... to GenBank accession ..." sentence.
 
 # MitoPilot 1.5.8
