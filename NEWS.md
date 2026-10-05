@@ -12,6 +12,10 @@
 - In the metadata viewer's **Compare** tab, coordinates that match only within the 0.01 degree tolerance now show the status **agree (rounding)** instead of plain "agree". The values shown are always the original stored values.
 - The export's `sample_info.csv` has a new `ref_accession` column holding just the GenBank reference accession (blank when the reference was flagged as poor). It replaces the `ref_comparison` column and its "compared sample ... to GenBank accession ..." sentence.
 
+## Bug Fixes
+
+- Opening the app on a project with no extra mapping-file columns and no fetched GEOME, GBIF, or NCBI metadata (for example a fresh test project) failed with "replacement has 1 row, data has 0".
+
 # MitoPilot 1.5.8
 
 Released 2026-09-29. Container: `macguigand/mitopilot:1.5.8`

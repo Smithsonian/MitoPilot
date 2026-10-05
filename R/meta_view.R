@@ -51,13 +51,13 @@ meta_view_fields <- function(con) {
                n_samples = s$n_samples, example = s$example, col = paste0("mv_", s$col))
   })
   out <- do.call(rbind, c(list(map), specimen))
-  if (is.null(out)) {
+  if (!is.null(out)) out <- out[out$n_samples > 0, ]
+  if (is.null(out) || !nrow(out)) {
     return(data.frame(source = character(), key = character(), level = character(),
                       field = character(), n_samples = integer(), n_total = integer(),
                       example = character(), col = character(), shown = logical(),
                       export = logical(), token = character()))
   }
-  out <- out[out$n_samples > 0, ]
   out$col <- make.unique(out$col, sep = "_")
   saved <- stats::setNames(st$shown == 1, st$key)[out$key]
   out$shown <- ifelse(is.na(saved), out$source == "Map file", saved)

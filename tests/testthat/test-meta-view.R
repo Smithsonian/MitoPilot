@@ -139,3 +139,14 @@ test_that("meta_view_modal has Show/Export controls and the picker table renders
   expect_match(html, "mpMV.save(&#39;x-meta_view_tbl&#39;, &#39;x-meta_view_state&#39;)", fixed = TRUE)
   expect_s3_class(meta_view_picker_table(f, "x-meta_view_tbl"), "reactable")
 })
+
+test_that("meta_view_fields is empty when no field has data", {
+  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
+  on.exit(DBI::dbDisconnect(con))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = c("s1", "s2"), Taxon = "x", R1 = "a", R2 = "b"))
+  .meta_ensure_tables(con)
+  f <- meta_view_fields(con)
+  expect_equal(nrow(f), 0L)
+  dat <- data.frame(ID = c("s1", "s2"), Taxon = "x")
+  expect_equal(meta_view_join(dat, con), dat)
+})
