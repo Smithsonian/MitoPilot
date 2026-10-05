@@ -22,6 +22,9 @@
 #'   interactively in RStudio.
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
+#' @param fetch_metadata (logical) Fetch each SRA sample's NCBI metadata and
+#'   follow links to GBIF and GEOME (default = TRUE). Linking is saved as the
+#'   project setting. Set FALSE when offline.
 #' @param ... Additional arguments passed `init_db()`
 #'
 #' @export
@@ -33,6 +36,7 @@ new_test_project <- function(
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     Rproj = TRUE,
     force = FALSE,
+    fetch_metadata = TRUE,
     ...) {
   # TODO add check for curl available
 
@@ -49,6 +53,7 @@ new_test_project <- function(
   mapping <- app_sys(file.path("test_data", "mapping_test.csv")) |>
     utils::read.csv() |>
     dplyr::slice_head(n = n)
+  mapping$BioSample <- ifelse(grepl("^[SED]RR[0-9]+$", mapping$ID), mapping$ID, "")
   readr::write_csv(mapping, file.path(path, "mapping.csv"), quote = "none", na = "")
 
   # Get Data ----
@@ -128,6 +133,8 @@ new_test_project <- function(
     min_depth = 500,
     executor = executor,
     Rproj = Rproj,
+    fetch_biosample = fetch_metadata,
+    link_sources = TRUE,
     ...
   )
 }

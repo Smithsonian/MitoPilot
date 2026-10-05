@@ -117,8 +117,8 @@ test_that("the run modal names its log after the run, and a finished run gets a 
       expect_equal(m[1, "launch"][[1]], "app")
     })
   }
-  run_one(function(...) new_test_project(n = 2, ...), pipeline_server)
-  run_one(new_test_project_userAsmb, pipeline_server_userAsmb)
+  run_one(function(...) new_test_project(n = 2, fetch_metadata = FALSE, ...), pipeline_server)
+  run_one(function(...) new_test_project_userAsmb(fetch_metadata = FALSE, ...), pipeline_server_userAsmb)
 })
 
 test_that("a saved submit template keeps the Nextflow command as a token", {

@@ -12,6 +12,7 @@ new_test_project(
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
   Rproj = TRUE,
   force = FALSE,
+  fetch_metadata = TRUE,
   ...
 )
 }
@@ -40,6 +41,10 @@ interactively in RStudio.}
 
 \item{force}{(logical) Force recreating of existing project database and
 config files (default = FALSE).}
+
+\item{fetch_metadata}{(logical) Fetch each SRA sample's NCBI metadata and
+follow links to GBIF and GEOME (default = TRUE). Linking is saved as the
+project setting. Set FALSE when offline.}
 
 \item{...}{Additional arguments passed `init_db()`}
 }
