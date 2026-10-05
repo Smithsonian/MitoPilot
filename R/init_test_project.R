@@ -22,6 +22,10 @@
 #'   interactively in RStudio.
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
+#' @param fetch_metadata (logical) Fetch each sample's NCBI metadata (synthetic samples use
+#'   their source run's) and
+#'   follow links to GBIF and GEOME (default = TRUE). Linking is saved as the
+#'   project setting. Set FALSE when offline.
 #' @param ... Additional arguments passed `init_db()`
 #'
 #' @export
@@ -33,6 +37,7 @@ new_test_project <- function(
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     Rproj = TRUE,
     force = FALSE,
+    fetch_metadata = TRUE,
     ...) {
   # TODO add check for curl available
 
@@ -128,6 +133,8 @@ new_test_project <- function(
     min_depth = 500,
     executor = executor,
     Rproj = Rproj,
+    fetch_biosample = fetch_metadata,
+    link_sources = TRUE,
     ...
   )
 }

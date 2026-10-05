@@ -1,16 +1,16 @@
-ID,Taxon,R1,R2
-SRR22396758,Upeneus parvus,SRR22396758_R1.fastq.gz,SRR22396758_R2.fastq.gz
-SRR22396794,Psychrolutes paradoxus,SRR22396794_R1.fastq.gz,SRR22396794_R2.fastq.gz
-SRR22396940,Psenes pellucidus,SRR22396940_R1.fastq.gz,SRR22396940_R2.fastq.gz
-SRR22396740,Hoplostethus occidentalis,SRR22396740_R1.fastq.gz,SRR22396740_R2.fastq.gz
-SRR21844202,Fundulus majalis,SRR21844202_R1.fastq.gz,SRR21844202_R2.fastq.gz
-SRR22396640,Xyrichtys novacula,SRR22396640_R1.fastq.gz,SRR22396640_R2.fastq.gz
-SRR22396732,Gephyroberyx darwinii,SRR22396732_R1.fastq.gz,SRR22396732_R2.fastq.gz
-SRR22396627,Gigantura indica,SRR22396627_R1.fastq.gz,SRR22396627_R2.fastq.gz
-SRR21843972,Stomias affinis,SRR21843972_R1.fastq.gz,SRR21843972_R2.fastq.gz
-SRR22396843,Conger oceanicus,SRR22396843_R1.fastq.gz,SRR22396843_R2.fastq.gz
-SRR22396668,Erotelis smaragdus,SRR22396668_R1.fastq.gz,SRR22396668_R2.fastq.gz
-SRR22396865,Paraconger caudilimbatus,SRR22396865_R1.fastq.gz,SRR22396865_R2.fastq.gz
-SRR19434536,Rhinecanthus rectangulus,SRR19434536_R1.fastq.gz,SRR19434536_R2.fastq.gz
-MULTISCAFF,Xyrichtys novacula,MULTISCAFF_R1.fastq.gz,MULTISCAFF_R2.fastq.gz
-SCAFFJOIN,Conger oceanicus,SCAFFJOIN_R1.fastq.gz,SCAFFJOIN_R2.fastq.gz
+ID,Taxon,R1,R2,BioSample
+SRR22396758,Upeneus parvus,SRR22396758_R1.fastq.gz,SRR22396758_R2.fastq.gz,SRR22396758
+SRR22396794,Psychrolutes paradoxus,SRR22396794_R1.fastq.gz,SRR22396794_R2.fastq.gz,SRR22396794
+SRR22396940,Psenes pellucidus,SRR22396940_R1.fastq.gz,SRR22396940_R2.fastq.gz,SRR22396940
+SRR22396740,Hoplostethus occidentalis,SRR22396740_R1.fastq.gz,SRR22396740_R2.fastq.gz,SRR22396740
+SRR21844202,Fundulus majalis,SRR21844202_R1.fastq.gz,SRR21844202_R2.fastq.gz,SRR21844202
+SRR22396640,Xyrichtys novacula,SRR22396640_R1.fastq.gz,SRR22396640_R2.fastq.gz,SRR22396640
+SRR22396732,Gephyroberyx darwinii,SRR22396732_R1.fastq.gz,SRR22396732_R2.fastq.gz,SRR22396732
+SRR22396627,Gigantura indica,SRR22396627_R1.fastq.gz,SRR22396627_R2.fastq.gz,SRR22396627
+SRR21843972,Stomias affinis,SRR21843972_R1.fastq.gz,SRR21843972_R2.fastq.gz,SRR21843972
+SRR22396843,Conger oceanicus,SRR22396843_R1.fastq.gz,SRR22396843_R2.fastq.gz,SRR22396843
+SRR22396668,Erotelis smaragdus,SRR22396668_R1.fastq.gz,SRR22396668_R2.fastq.gz,SRR22396668
+SRR22396865,Paraconger caudilimbatus,SRR22396865_R1.fastq.gz,SRR22396865_R2.fastq.gz,SRR22396865
+SRR19434536,Rhinecanthus rectangulus,SRR19434536_R1.fastq.gz,SRR19434536_R2.fastq.gz,SRR19434536
+MULTISCAFF,Xyrichtys novacula,MULTISCAFF_R1.fastq.gz,MULTISCAFF_R2.fastq.gz,SRR22396640
+SCAFFJOIN,Conger oceanicus,SCAFFJOIN_R1.fastq.gz,SCAFFJOIN_R2.fastq.gz,SRR22396843

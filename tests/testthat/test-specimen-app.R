@@ -13,7 +13,7 @@ test_that(".meta_save_fields replaces the selection", {
 test_that("the Export column picker offers a GEOME group, and ticked GEOME
           fields render as a GEOME column group in the Export table", {
   proj <- withr::local_tempdir()
-  suppressMessages(new_test_project_userAsmb(path = proj, executor = "local", Rproj = FALSE))
+  suppressMessages(new_test_project_userAsmb(path = proj, executor = "local", Rproj = FALSE, fetch_metadata = FALSE))
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(proj, ".sqlite"))
   withr::defer(DBI::dbDisconnect(con))
   withr::local_options(MitoPilot.db = file.path(proj, ".sqlite"))
@@ -167,8 +167,8 @@ test_that("panel module servers start outside a reactive context, with specimen 
       ms$close()
     }
   }
-  start(function(...) new_test_project(n = 2, ...), c("assemble_server", "annotate_server", "export_server"))
-  start(new_test_project_userAsmb, "assemble_server_userAsmb")
+  start(function(...) new_test_project(n = 2, fetch_metadata = FALSE, ...), c("assemble_server", "annotate_server", "export_server"))
+  start(function(...) new_test_project_userAsmb(fetch_metadata = FALSE, ...), "assemble_server_userAsmb")
 })
 
 test_that("meta_record_view orders GEOME root first and links BCIDs", {

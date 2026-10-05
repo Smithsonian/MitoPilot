@@ -19,7 +19,7 @@ test_that("the Export column picker offers a Metadata group, on by default", {
 
 test_that("the rendered Export table shows mapping-file columns in the Metadata group by default", {
   proj <- withr::local_tempdir()
-  suppressMessages(new_test_project_userAsmb(path = proj, executor = "local", Rproj = FALSE))
+  suppressMessages(new_test_project_userAsmb(path = proj, executor = "local", Rproj = FALSE, fetch_metadata = FALSE))
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(proj, ".sqlite"))
   withr::defer(DBI::dbDisconnect(con))
   withr::local_options(MitoPilot.db = file.path(proj, ".sqlite"))
@@ -38,7 +38,7 @@ test_that("the rendered Export table shows mapping-file columns in the Metadata 
     cls <- vapply(cols, function(c) c$className %||% "", character(1))
     shown <- vapply(cols, function(c) !isFALSE(c$show), logical(1))
     expect_true("mv_map_Expected" %in% id[shown])
-    expect_equal(id[grepl("mp-grp-Metadata", cls)], "mv_map_Expected")
+    expect_setequal(id[grepl("mp-grp-Metadata", cls)], c("mv_map_Expected", "mv_map_BioSample"))
     expect_false("Expected" %in% id[shown])
     expect_false(any(id[shown] %in% c("assembly", "R1", "R2")))
   })

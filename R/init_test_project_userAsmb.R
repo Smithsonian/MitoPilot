@@ -32,6 +32,10 @@
 #'   interactively in RStudio.
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
+#' @param fetch_metadata (logical) Fetch each sample's NCBI metadata from its donor run (the
+#'   first donor for mixed samples) and
+#'   follow links to GBIF and GEOME (default = TRUE). Linking is saved as the
+#'   project setting. Set FALSE when offline.
 #' @param ... Additional arguments passed to [new_project_userAsmb()]
 #'
 #' @export
@@ -43,6 +47,7 @@ new_test_project_userAsmb <- function(
     container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
     Rproj = TRUE,
     force = FALSE,
+    fetch_metadata = TRUE,
     ...) {
 
   # Fail early on an unsupported Nextflow (see README "Nextflow compatibility").
@@ -99,6 +104,7 @@ new_test_project_userAsmb <- function(
   mf_db <- file.path(path, "fish_mito_sampler.gb")
   file.copy(app_sys(file.path("test_data", "fish_mito_sampler.gb")), mf_db, overwrite = TRUE)
 
+  mapping$BioSample <- sub(";.*", "", mapping$Donors)
   mapping$Donors <- NULL
   readr::write_csv(mapping, file.path(path, "mapping.csv"), quote = "none", na = "")
 
@@ -117,6 +123,8 @@ new_test_project_userAsmb <- function(
     executor = executor,
     Rproj = Rproj,
     force = force,
+    fetch_biosample = fetch_metadata,
+    link_sources = TRUE,
     ...
   )
 }
