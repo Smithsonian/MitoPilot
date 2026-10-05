@@ -232,9 +232,9 @@ follow it unless you pass `link_sources = TRUE` or `FALSE`.
 | From | To | Where the link is read |
 |---|---|---|
 | NCBI BioSample | GEOME | the `bcid` attribute (samples submitted to the SRA through GEOME) |
-| NCBI BioSample | GBIF | a Smithsonian EZID in `voucherURI` or `catalogNumber`; otherwise a search for the `specimen_voucher` (see below) |
+| NCBI BioSample | GBIF | a Smithsonian EZID in `voucherURI` or `catalogNumber`; otherwise a search for the voucher in `specimen_voucher`, `genbankSpecimenVoucher`, `materialSampleID`, `voucherCatalogNumber`, or `bio_material` (see below) |
 | GEOME | NCBI | the tissue's sequencing record, which names its BioSample (one extra GEOME request) |
-| GEOME | GBIF | a Smithsonian EZID in `voucherURI` or `catalogNumber`; otherwise a search for `genbankSpecimenVoucher` or `materialSampleID` |
+| GEOME | GBIF | a Smithsonian EZID in `voucherURI` or `catalogNumber`; otherwise a search for the voucher in `genbankSpecimenVoucher`, `materialSampleID`, `voucherCatalogNumber`, `otherCatalogNumbers`, or `catalogNumber`, or a bare `voucherCatalogNumber` joined to the `institutionID` |
 | GBIF | NCBI | a BioSample (or else an SRA run) listed in `associatedSequences` |
 | GBIF | GEOME | a GEOME ARK in `occurrenceID` or `materialSampleID` (datasets GEOME publishes to GBIF) |
 
@@ -259,21 +259,29 @@ Rules that keep linking safe:
 ### Matching a voucher to a GBIF record
 
 Only Smithsonian specimens carry an EZID that points straight at a GBIF record.
-For other museums MitoPilot searches GBIF for the voucher, which GenBank writes
-as `institution:collection:catalog` (for example `UW:157636`,
-`USNM:FISH:419933`). GBIF stores catalog numbers in several forms, so it tries
-three queries in turn, then filters the hits strictly and links only when
-exactly one specimen is left:
+For other museums MitoPilot searches GBIF for the voucher. It reads the
+[Darwin Core triplet](https://dwc.tdwg.org/terms/#dwc:catalogNumber) forms
+GenBank and museums use: `institution:collection:catalog`
+(`USNM:FISH:419933`), `institution:catalog` (`UW:157636`), the same with a
+`urn:catalog:` prefix, and `institution catalog` with a space (`USNM 419933`).
+GBIF stores catalog numbers in several forms, so it tries three queries in
+turn (the voucher spelled as GBIF publishers write it, then the bare catalog
+number with the institution code, then the occurrence ID), filters the hits,
+and links only when exactly one specimen is left:
 
 ![How a voucher is matched to one GBIF record](figures/link_gbif_voucher.svg)
 
 The species check matters: one catalog number can belong to many specimens (a
 museum lot such as `SIO 09-320` holds 27 species, and `USNM 419933` exists in
-the fish, herpetology, and mammal collections). When several specimens still
-match, nothing is linked and the viewer says "N possible GBIF matches for
-...; not linked"; paste the right gbifID yourself. Vouchers without an
-institution code, or specimens the museum has not published to GBIF, cannot be
-matched.
+the fish, herpetology, and mammal collections). The collection code narrows
+the hits when GBIF uses the same code, but does not reject a lone match under
+another code (GenBank's `UW:FISH:...` is `ADULT COLLECTION` at GBIF). GBIF
+occurrences mined from GenBank or the Barcode of Life (the "INSDC Sequences"
+and "iBOL" datasets) are skipped, since they are copies of sequence records,
+not museum catalogs. When several specimens still match, nothing is linked
+and the viewer says "N possible GBIF matches for ...; not linked"; paste the
+right gbifID yourself. Vouchers without an institution code, or specimens the
+museum has not published to GBIF, cannot be matched.
 
 <div class="alert alert-note">
 <strong>Records can disagree about sequencing runs.</strong> GEOME's sequencing
@@ -445,7 +453,7 @@ wins over a sample value, which wins over an event value).
 | `geome_lat_lon` | `decimalLatitude`, `decimalLongitude` | `17.48260 S 149.89990 W` |
 | `geome_collection_date` | `yearCollected`, `monthCollected`, `dayCollected` | `2006-03-18`, `2009-11`, or `2009` |
 | `geome_geo_loc_name` | `country`, then `stateProvince` and `locality` | `French Polynesia: Moorea` |
-| `geome_specimen_voucher` | `catalogNumber` (required; skipped if it is a web address or ARK), `institutionCode` (optional prefix) | `UF:12345` |
+| `geome_specimen_voucher` | `genbankSpecimenVoucher` when present; else `catalogNumber` (required; skipped if it is a web address or ARK) with `institutionCode` as an optional prefix | `USNM:FISH:407263`, `UF:12345` |
 | `geome_collected_by` | `collectorList` | as in GEOME |
 | `geome_tissue_type` | `tissueType` | as in GEOME |
 | `geome_sex` | `sex` | as in GEOME |
@@ -460,7 +468,7 @@ Built from the occurrence only (never from the dataset or organization).
 | `gbif_lat_lon` | `decimalLatitude`, `decimalLongitude` | `28.53783 N 81.33322 W` |
 | `gbif_collection_date` | `year`, `month`, `day`; else `eventDate` when it is a single date | `2026-02-23`, `2026-02`, or `2026` |
 | `gbif_geo_loc_name` | `country`, then `stateProvince` and `locality` | `United States of America: Florida, Lake Underhill` |
-| `gbif_specimen_voucher` | `institutionCode`, `collectionCode`, `catalogNumber` (required) | `UF:Fish:250399` |
+| `gbif_specimen_voucher` | `institutionCode`, `collectionCode`, `catalogNumber` (required; a leading repeat of the institution code, as in `USNM 419933`, is dropped) | `UF:Fish:250399`, `USNM:FISH:419933` |
 | `gbif_collected_by` | `recordedBy` | as in GBIF |
 | `gbif_identified_by` | `identifiedBy` | as in GBIF |
 | `gbif_sex` | `sex` | lowercased |
