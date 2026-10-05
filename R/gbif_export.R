@@ -47,6 +47,8 @@ GBIF_COMBOS <- list(
       inst <- .gbif_occ(recs, "institutionCode")
       coll <- .gbif_occ(recs, "collectionCode")
       if (is.na(inst)) return(cat)
+      # catalog numbers that repeat the institution code ("USNM 419933")
+      cat <- sub(paste0("^", inst, "[ :_-]+"), "", cat, ignore.case = TRUE)
       if (is.na(coll)) paste0(inst, ":", cat) else paste(inst, coll, cat, sep = ":")
     }
   ),

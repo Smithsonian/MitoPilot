@@ -1,53 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 720" width="660" height="720" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 860" width="660" height="860" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
   <defs>
     <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#1f6f8b"/>
     </marker>
   </defs>
-  <rect width="660" height="720" fill="#ffffff"/>
+  <rect width="660" height="860" fill="#ffffff"/>
   <g stroke="#1f6f8b" stroke-width="2" fill="#e4f0f4">
     <rect x="110" y="20" width="440" height="56" rx="28"/>
-    <rect x="110" y="106" width="440" height="40" rx="6"/>
-    <rect x="110" y="176" width="440" height="86" rx="6"/>
-    <rect x="110" y="292" width="440" height="40" rx="6"/>
-    <rect x="110" y="362" width="440" height="40" rx="6"/>
+    <rect x="110" y="106" width="440" height="76" rx="6"/>
+    <rect x="110" y="212" width="440" height="104" rx="6"/>
+    <rect x="110" y="346" width="440" height="56" rx="6"/>
     <rect x="110" y="432" width="440" height="40" rx="6"/>
-    <path d="M330,502 L430,547 L330,592 L230,547 z"/>
+    <rect x="110" y="502" width="440" height="56" rx="6"/>
+    <rect x="110" y="588" width="440" height="40" rx="6"/>
+    <path d="M330,658 L430,703 L330,748 L230,703 z"/>
   </g>
-  <rect x="190" y="630" width="280" height="62" rx="6" fill="#e2f3e6" stroke="#2e7d4f" stroke-width="2"/>
-  <rect x="470" y="518" width="175" height="62" rx="6" fill="#fdf1dc" stroke="#b7791f" stroke-width="2"/>
+  <rect x="190" y="786" width="280" height="62" rx="6" fill="#e2f3e6" stroke="#2e7d4f" stroke-width="2"/>
+  <rect x="470" y="674" width="175" height="62" rx="6" fill="#fdf1dc" stroke="#b7791f" stroke-width="2"/>
   <g fill="#243137" font-size="13" text-anchor="middle">
     <text x="330" y="44" font-weight="700">Voucher from NCBI or GEOME</text>
-    <text x="330" y="63">e.g. UW:157636 or USNM:FISH:419933</text>
-    <text x="330" y="131">Split into institution : collection : catalog number</text>
-    <text x="330" y="198" font-weight="700">Search GBIF, one query at a time:</text>
-    <text x="330" y="218">1. occurrenceID = catalog number</text>
-    <text x="330" y="236">2. catalogNumber = "institution catalog" (UW 157636)</text>
-    <text x="330" y="254">3. catalogNumber = catalog, institutionCode = institution</text>
-    <text x="330" y="317">Keep hits whose species matches the sample's Taxon</text>
-    <text x="330" y="387">Keep hits from the voucher's collection, if it names one</text>
-    <text x="330" y="457">Prefer preserved specimens over tissue copies</text>
-    <text x="330" y="551" font-weight="700">Hits left?</text>
-    <text x="330" y="656" font-weight="700">Exactly one: link it</text>
-    <text x="330" y="676" font-size="12">records "found through ... UW:157636"</text>
-    <text x="557" y="542" font-weight="700">Two or more:</text>
-    <text x="557" y="560" font-size="12">not linked, note shown</text>
+    <text x="330" y="63">e.g. UW:157636, USNM:FISH:419933, USNM 419933</text>
+    <text x="330" y="126" font-weight="700">Read the Darwin Core triplet</text>
+    <text x="330" y="146">institution : collection : catalog, institution : catalog,</text>
+    <text x="330" y="164">urn:catalog: prefix, or "institution catalog" with a space</text>
+    <text x="330" y="234" font-weight="700">Search GBIF, one query at a time:</text>
+    <text x="330" y="254">1. catalogNumber spelled every way publishers write it</text>
+    <text x="330" y="272">(UW:157636, UW 157636, UW:FISH:157636)</text>
+    <text x="330" y="290">2. catalogNumber = catalog, institutionCode = institution</text>
+    <text x="330" y="308">3. occurrenceID = catalog number, same institution</text>
+    <text x="330" y="366">Drop copies of sequence records</text>
+    <text x="330" y="384" font-size="12">(GBIF's "INSDC Sequences" and "iBOL" datasets, "Mined from GenBank")</text>
+    <text x="330" y="457">Keep hits whose species matches the sample's Taxon</text>
+    <text x="330" y="522">Narrow to the voucher's collection, if it names one</text>
+    <text x="330" y="540" font-size="12">(only when some hits use that code; a lone match under another code stays)</text>
+    <text x="330" y="613">Prefer preserved specimens over tissue copies</text>
+    <text x="330" y="707" font-weight="700">Hits left?</text>
+    <text x="330" y="812" font-weight="700">Exactly one: link it</text>
+    <text x="330" y="832" font-size="12">records "found through ... UW:157636"</text>
+    <text x="557" y="698" font-weight="700">Two or more:</text>
+    <text x="557" y="716" font-size="12">not linked, note shown</text>
   </g>
   <g stroke="#1f6f8b" stroke-width="2" fill="none" marker-end="url(#ah2)">
     <line x1="330" y1="76" x2="330" y2="103"/>
-    <line x1="330" y1="146" x2="330" y2="173"/>
-    <line x1="330" y1="262" x2="330" y2="289"/>
-    <line x1="330" y1="332" x2="330" y2="359"/>
+    <line x1="330" y1="182" x2="330" y2="209"/>
+    <line x1="330" y1="316" x2="330" y2="343"/>
     <line x1="330" y1="402" x2="330" y2="429"/>
     <line x1="330" y1="472" x2="330" y2="499"/>
-    <line x1="330" y1="592" x2="330" y2="627"/>
-    <line x1="430" y1="547" x2="467" y2="547"/>
-    <polyline points="230,547 60,547 60,219 107,219"/>
+    <line x1="330" y1="558" x2="330" y2="585"/>
+    <line x1="330" y1="628" x2="330" y2="655"/>
+    <line x1="330" y1="748" x2="330" y2="783"/>
+    <line x1="430" y1="703" x2="467" y2="703"/>
+    <polyline points="230,703 60,703 60,264 107,264"/>
   </g>
   <g fill="#243137" font-size="12">
-    <text x="68" y="566">None:</text>
-    <text x="68" y="581">try the next query</text>
-    <text x="68" y="596">(no queries left:</text>
-    <text x="68" y="611">not linked)</text>
+    <text x="68" y="722">None:</text>
+    <text x="68" y="737">try the next query</text>
+    <text x="68" y="752">(no queries left:</text>
+    <text x="68" y="767">not linked)</text>
   </g>
 </svg>

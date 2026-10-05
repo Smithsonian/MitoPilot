@@ -9,6 +9,8 @@
 
 ## Changes
 
+- **Linking to GBIF by voucher now follows Darwin Core.** When a GEOME or NCBI record has no Smithsonian EZID, MitoPilot searches GBIF for the specimen voucher in every field that can hold one (`specimen_voucher`, `genbankSpecimenVoucher`, `materialSampleID`, `voucherCatalogNumber`, `otherCatalogNumbers`, `bio_material`, or a bare catalog number with the institution code). It reads triplets, doublets, `urn:catalog:` prefixes, and `USNM 419933`-style spacing, no longer rejects the only match over a differing collection code, and skips GBIF occurrences copied from GenBank or BOLD.
+- `geome_specimen_voucher` uses `genbankSpecimenVoucher` when GEOME has it, and `gbif_specimen_voucher` drops a catalog number's leading repeat of the institution code.
 - In the metadata viewer's **Compare** tab, coordinates that match only within the 0.01 degree tolerance now show the status **agree (rounding)** instead of plain "agree". The values shown are always the original stored values.
 - The export's `sample_info.csv` has a new `ref_accession` column holding just the GenBank reference accession (blank when the reference was flagged as poor). It replaces the `ref_comparison` column and its "compared sample ... to GenBank accession ..." sentence.
 

@@ -311,3 +311,48 @@ test_that("two sources naming different records for a linked ID leave a note", {
   .meta_link_sample(con, "s1")
   expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM meta_links WHERE source = 'GBIF' AND note IS NOT NULL")), 1L)
 })
+
+test_that("vouchers parse as Darwin Core triplets, doublets, and INST CAT forms", {
+  expect_equal(.parse_voucher("USNM:FISH:419933"), list(inst = "USNM", cat = "419933", coll = "FISH"))
+  expect_equal(.parse_voucher("UW 157636")$cat, "157636")
+  expect_equal(.parse_voucher("urn:catalog:UWFC:ADULT COLLECTION:UW 157636")$coll, "ADULT COLLECTION")
+  expect_equal(.parse_voucher("FMNH:Mammal:1234 | MBG 33424")$cat, "1234")
+  expect_null(.parse_voucher("http://n2t.net/ark:/65665/3abc"))
+  expect_null(.parse_voucher("250399"))
+})
+
+test_that("sequence-derived GBIF datasets never link, and INST CAT doublets do", {
+  insdc <- gocc(6189916995, "Psychrolutes paradoxus")
+  insdc$datasetKey <- "d8cd16ba-bb74-4420-821e-083f2bac17c2"
+  mined <- gocc(5860571592, "Psychrolutes paradoxus", basis = "MATERIAL_SAMPLE")
+  mined$institutionCode <- "Mined from GenBank, NCBI"
+  local_mocked_bindings(.gbif_get = function(path) list(results = list(insdc, mined)))
+  expect_null(.gbif_find_voucher("UW:157636", "Psychrolutes paradoxus"))
+  local_mocked_bindings(.gbif_get = function(path) {
+    if (grepl("catalogNumber=UW%20157636", path, fixed = TRUE)) {
+      return(list(results = list(insdc, gocc(2013211250, "Psychrolutes paradoxus", "ADULT COLLECTION"))))
+    }
+    list(results = list())
+  })
+  expect_equal(.gbif_find_voucher("UW 157636", "Psychrolutes paradoxus")$ref, "2013211250")
+})
+
+test_that("a collection code narrows hits but does not reject the only match", {
+  hits <- list(results = list(gocc(1, "Fundulus majalis", "ADULT COLLECTION")))
+  local_mocked_bindings(.gbif_get = function(path) hits)
+  expect_equal(.gbif_find_voucher("USNM:FISH:419933", "Fundulus majalis")$ref, "1")
+})
+
+test_that("GEOME and NCBI records link to GBIF through more voucher fields", {
+  local_mocked_bindings(.gbif_get = function(path) {
+    if (grepl("UW", path, fixed = TRUE)) list(results = list(gocc(2013211250, "Psychrolutes paradoxus")))
+    else list(results = list())
+  }, .geome_get = function(path, query = list()) list(children = list()))
+  r <- lrecs("Sample", c("institutionID", "voucherCatalogNumber"), c("UW", "157636"))
+  c <- .meta_link_candidates("GEOME", r, "Psychrolutes paradoxus")
+  expect_equal(c$GBIF$ref, "2013211250")
+  expect_equal(c$GBIF$via, "GEOME Sample voucherCatalogNumber UW:157636")
+  r <- lrecs("BioSample", "materialSampleID", "UW:157636")
+  c <- .meta_link_candidates("NCBI", r, "Psychrolutes paradoxus")
+  expect_equal(c$GBIF$via, "NCBI BioSample materialSampleID UW:157636")
+})
