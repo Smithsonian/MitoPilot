@@ -193,3 +193,40 @@ test_that("resolve reports missing values and mismatches; offline skips checks",
   nmnh_set_columns(con, voucher = "", uri = "ark")
   expect_equal(nmnh_columns(con), list(voucher = NA_character_, uri = "ark"))
 })
+
+test_that("export writes NMNH values and drops the empty modifier", {
+  d <- withr::local_tempdir()
+  out_dir <- file.path(d, "out")
+  dir.create(out_dir)
+  withr::with_seed(1, sq <- paste(sample(c("A", "C", "G", "T"), 1200, TRUE), collapse = ""))
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
+  DBI::dbWriteTable(con, "annotations", data.frame(
+    ID = "s1", path = 1L, scaffold = 1L, contig = "s1.1.1", type = "PCG", gene = "cox1",
+    product = "cox1", pos1 = 100L, pos2 = 700L, length = 601L, direction = "+",
+    start_codon = "ATG", stop_codon = "TAA", translation = strrep("M", 30L),
+    anticodon = NA_character_, partial_start = 0L, partial_stop = 0L, notes = NA_character_,
+    refHits = "{}", warnings = NA_character_))
+  DBI::dbWriteTable(con, "assemblies", data.frame(ID = "s1", path = 1L, scaffold = 1L, ignore = 0L,
+                                                  topology = "circular", sequence = sq))
+  DBI::dbWriteTable(con, "export", data.frame(ID = "s1", path = 1L, scaffold = 1L,
+                                              export_group = "g1", export_time_stamp = NA_integer_))
+  DBI::dbWriteTable(con, "annotate", data.frame(ID = "s1", path = 1L, scaffold = 1L, topology = "circular",
+                                                partial = "no", curate_opts = "default"))
+  DBI::dbWriteTable(con, "curate_opts", data.frame(curate_opts = "default", params = "{}", linear_complete = 0L))
+  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "Testus testus", genetic_code = 2L,
+                                               specimen_voucher = "usnm:fish:1"))
+  DBI::dbWriteTable(con, "assemble", data.frame(ID = "s1", blast_accession = "NC_000001",
+                                                blast_accession_auto = 0L, poor_blast_ref = "ok"))
+  DBI::dbDisconnect(con)
+  local_mocked_bindings(.gbif_get = function(path) stop("offline"))
+  suppressMessages(export_files(
+    group = "g1", out_dir = out_dir, generateAAalignments = FALSE, gene_export = TRUE,
+    review = FALSE, summary_csv = FALSE,
+    fasta_header = nmnh_template_add(DEFAULT_FASTA_HEADER),
+    fasta_header_gene = nmnh_template_add(DEFAULT_FASTA_HEADER_GENE)))
+  h <- grep("^>", readLines(file.path(out_dir, "export", "g1", "g1.fasta")), value = TRUE)
+  expect_match(h, "[location=mitochondrion] [specimen_voucher=USNM:FISH:1] Testus", fixed = TRUE)
+  expect_false(grepl("voucherURI", h))
+  g <- list.files(file.path(out_dir, "s1", "export"), "_cox1[.]fasta$", full.names = TRUE)
+  expect_match(readLines(g)[1], "[specimen_voucher=USNM:FISH:1] Testus testus, cox1", fixed = TRUE)
+})
