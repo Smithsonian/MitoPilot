@@ -32,7 +32,8 @@
 #'   interactively in RStudio.
 #' @param force (logical) Force recreating of existing project database and
 #'   config files (default = FALSE).
-#' @param fetch_metadata (logical) Fetch each single-donor sample's donor run NCBI metadata and
+#' @param fetch_metadata (logical) Fetch each sample's NCBI metadata from its donor run (the
+#'   first donor for mixed samples) and
 #'   follow links to GBIF and GEOME (default = TRUE). Linking is saved as the
 #'   project setting. Set FALSE when offline.
 #' @param ... Additional arguments passed to [new_project_userAsmb()]
@@ -103,7 +104,7 @@ new_test_project_userAsmb <- function(
   mf_db <- file.path(path, "fish_mito_sampler.gb")
   file.copy(app_sys(file.path("test_data", "fish_mito_sampler.gb")), mf_db, overwrite = TRUE)
 
-  mapping$BioSample <- ifelse(grepl(";", mapping$Donors), "", mapping$Donors)
+  mapping$BioSample <- sub(";.*", "", mapping$Donors)
   mapping$Donors <- NULL
   readr::write_csv(mapping, file.path(path, "mapping.csv"), quote = "none", na = "")
 

@@ -42,7 +42,8 @@ interactively in RStudio.}
 \item{force}{(logical) Force recreating of existing project database and
 config files (default = FALSE).}
 
-\item{fetch_metadata}{(logical) Fetch each SRA sample's NCBI metadata and
+\item{fetch_metadata}{(logical) Fetch each sample's NCBI metadata (synthetic samples use
+their source run's) and
 follow links to GBIF and GEOME (default = TRUE). Linking is saved as the
 project setting. Set FALSE when offline.}
 
