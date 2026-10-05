@@ -547,6 +547,35 @@ when every sample in the export group has a value for it. MitoPilot never
 changes your templates on its own.
 </div>
 
+### NMNH submissions
+
+NMNH requires every GenBank record to carry the specimen's Darwin Core voucher
+and its EZID, for example
+`[specimen_voucher=USNM:FISH:487075] [voucherURI=http://n2t.net/ark:/65665/30f303846-9d23-4069-881e-e43ff718ef9f]`.
+Tick **NMNH user** in the Export Data window to add both modifiers to the header
+template (and to the gene header when genes are exported). Untick it to take
+them out. Saving the template saves the setting. If the template already has a
+`specimen_voucher` or `voucherURI` modifier, MitoPilot asks before replacing it.
+
+Values are filled per sample, first valid one wins: the mapping-file columns
+picked in **Voucher column** and **Voucher URI column**, then the linked GBIF
+record, then NCBI, then GEOME. A voucher with no URI is looked up in GBIF, and a
+URI with no voucher takes the voucher of its GBIF record. MitoPilot then:
+
+- accepts `USNM:<collection>:<catalog>` with the NCBI collection codes `FISH`,
+  `Birds`, `MAMM`, `Herp`, `IZ`, `ENT`, `Botany`, or `US:<catalog>`, and fixes
+  case and repeated `USNM` prefixes; `USNM:LAB` tissue numbers are rejected;
+- writes every EZID as `http://n2t.net/ark:/65665/3...`, and asks GBIF that it
+  is a specimen: a tissue EZID is replaced with its parent specimen, and the
+  voucher must match the GBIF record. Answers are cached in the project;
+  **Re-check** asks again.
+
+The line under the columns shows how many samples are ready. **View report**
+lists the problems; type a fix into a cell, or download the CSV, edit it, and
+upload it (this runs `update_sample_metadata()`). Exporting with problems asks
+first, and an empty `[specimen_voucher=]` or `[voucherURI=]` is left out of the
+header.
+
 ### The conflict warning at export
 
 When you click **Export**, MitoPilot checks which items your header templates
