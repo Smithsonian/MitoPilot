@@ -211,6 +211,11 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     if (!is.null(data) && nrow(data) > 0) {
       hdr <- stringr::str_glue_data(data, template)
       dm <- unique(unlist(duplicate_modifiers(hdr)))
+      nm <- dm[gsub("_", "", dm) %in% c("specimenvoucher", "voucheruri")]
+      if (length(nm)) {
+        return(err(sprintf("Duplicate %s. NMNH records need each exactly once: take the other out.",
+                           paste0("[", nm, "=]", collapse = ", "))))
+      }
       if (length(dm)) {
         return(list(ok = TRUE, level = "warn", message = sprintf(
           paste("Duplicate %s. NCBI accepts each modifier once: keep one",
@@ -251,6 +256,7 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
 missing_fields <- function(template, data) {
   tok <- regmatches(template, gregexpr("\\{[^{}]*\\}", template))[[1]]
   nm <- intersect(unique(substr(tok, 2L, nchar(tok) - 1L)), names(data))
+  nm <- nm[!startsWith(nm, "nmnh_")]
   ids <- unique(data$ID)
   out <- vapply(nm, function(n) {
     v <- trimws(as.character(data[[n]]))
