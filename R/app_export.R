@@ -1188,7 +1188,7 @@ export_server <- function(id) {
           uiOutput(ns("nmnh_copy")),
           downloadButton(ns("nmnh_csv"), "Download CSV for bulk edit", class = "btn-sm btn-default"),
           fileInput(ns("nmnh_upload"), NULL, accept = ".csv", buttonLabel = "Upload edited CSV",
-                    placeholder = "runs update_sample_metadata()")
+                    placeholder = "CSV file")
         ),
         footer = mp_footer(primary = actionButton(ns("nmnh_back"), "Back to export"), dismiss = NULL)
       ) |> showModal()
@@ -1202,8 +1202,9 @@ export_server <- function(id) {
     })
     output$nmnh_table <- reactable::renderReactable({
       r <- nmnh_problems()
+      # html = TRUE: reactable drops inline handlers on R tags
       cell <- function(field, src, note) function(value, index) {
-        tagList(
+        as.character(tagList(
           tags$input(
             type = "text", class = "form-control input-sm", value = value %|NA|% "",
             `aria-label` = paste(field, r$ID[index]),
@@ -1214,7 +1215,7 @@ export_server <- function(id) {
           div(class = if (nzchar(note[index])) "mp-fg-warning",
               style = "font-size: var(--mp-fs-meta); white-space: normal;",
               nmnh_note(src[index], note[index]))
-        )
+        ))
       }
       reactable::reactable(
         data.frame(ID = r$ID, specimen_voucher = r$nmnh_specimen_voucher,
@@ -1224,9 +1225,9 @@ export_server <- function(id) {
         columns = list(
           ID = reactable::colDef(minWidth = 110),
           specimen_voucher = reactable::colDef(
-            minWidth = 230, cell = cell("voucher", r$voucher_source, r$voucher_note)),
+            minWidth = 230, html = TRUE, cell = cell("voucher", r$voucher_source, r$voucher_note)),
           voucherURI = reactable::colDef(
-            minWidth = 330, cell = cell("uri", r$uri_source, r$uri_note))
+            minWidth = 330, html = TRUE, cell = cell("uri", r$uri_source, r$uri_note))
         )
       )
     })
