@@ -256,6 +256,7 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
 missing_fields <- function(template, data) {
   tok <- regmatches(template, gregexpr("\\{[^{}]*\\}", template))[[1]]
   nm <- intersect(unique(substr(tok, 2L, nchar(tok) - 1L)), names(data))
+  nm <- nm[!startsWith(nm, "nmnh_")]
   ids <- unique(data$ID)
   out <- vapply(nm, function(n) {
     v <- trimws(as.character(data[[n]]))

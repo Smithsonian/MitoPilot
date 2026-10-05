@@ -230,3 +230,8 @@ test_that("export writes NMNH values and drops the empty modifier", {
   g <- list.files(file.path(out_dir, "s1", "export"), "_cox1[.]fasta$", full.names = TRUE)
   expect_match(readLines(g)[1], "[specimen_voucher=USNM:FISH:1] Testus testus, cox1", fixed = TRUE)
 })
+
+test_that("missing_fields leaves NMNH tokens to the NMNH status line", {
+  d <- data.frame(ID = "a", nmnh_voucherURI = "")
+  expect_null(missing_fields("{ID} [voucherURI={nmnh_voucherURI}]", d))
+})
