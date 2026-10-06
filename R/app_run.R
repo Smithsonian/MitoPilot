@@ -43,6 +43,7 @@ run_app <- function(
     launch.browser = NULL,
     ...) {
 
+  ensure_hydra_setup()
   # Fail early on an unsupported Nextflow (see README "Nextflow compatibility").
   check_nextflow_version("MitoPilot app")
 

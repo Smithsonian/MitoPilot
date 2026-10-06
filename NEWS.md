@@ -16,6 +16,7 @@
 - **Sample metadata from the voucher report.** Click a sample ID in the NMNH voucher report to open its metadata, then return to the report. The metadata window now has a copy button on every value and **Export CSV** to save all of a sample's metadata.
 - **Non-NMNH samples and chosen fields in the voucher report.** Tick **Not NMNH** for samples that are not NMNH specimens: their voucher and URI are used as found, without NMNH checks, and they stay in the report so you can untick them. For any sample, pick the mapping-file column or metadata field its `specimen_voucher` or `voucherURI` comes from (**Choose fields** adds more).
 - **NMNH user is remembered per project.** Export Data opens with the switch as you last left it. The voucher report's field lists are sorted and offer **None** to leave a modifier out.
+- **Hydra setup runs automatically.** On the NMNH Hydra cluster, `library(MitoPilot)` and opening the app run `hydra_setup()` when the job scheduler is not yet on `PATH`, so you no longer need to call it yourself.
 - **Empty source modifiers are left out of FASTA headers.** When a sample has no value for a `[modifier={field}]` in the header template, that modifier is dropped from its header instead of being written empty or as `NA`.
 
 ## Changes
