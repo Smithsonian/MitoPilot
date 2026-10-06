@@ -268,7 +268,7 @@ missing_fields <- function(template, data) {
   out <- out[!is.na(out)]
   if (length(out)) {
     paste0("Missing data in ", paste(out, collapse = "; "),
-           ". Fill in the column or take it out of the header.")
+           ". A [modifier=] with no value is left out of that sample's header.")
   }
 }
 

@@ -499,7 +499,7 @@ export_files <- function(
       TRUE
     }
     dat$completeness <- if (is_partial) "partial genome" else "complete genome"
-    header <- nmnh_strip_empty(stringr::str_glue_data(dat, fasta_header))
+    header <- header_fill(dat, fasta_header)
     # Safety net for saved templates that hardcode "complete genome"
     if (is_partial) {
       header <- stringr::str_replace(header, "complete genome$", "partial genome")
@@ -861,7 +861,7 @@ export_files <- function(
             head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene)
             head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
             head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
-            names(gene) <- nmnh_strip_empty(stringr::str_glue_data(dat, head))
+            names(gene) <- header_fill(dat, head)
 
             # write FASTA
             gene_fn <- file.path(export_path, paste0(.seqid, "_", cur$gene, ".fasta"))
@@ -1023,7 +1023,7 @@ export_files <- function(
             head_split[[1]][1] <- paste0(head_split[[1]][1], "_", cur$gene_uniq)
             head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
             head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
-            names(gene) <- nmnh_strip_empty(stringr::str_glue_data(dat, head))
+            names(gene) <- header_fill(dat, head)
 
             # reverse complement if needed
             if (cur$direction == "-") {
@@ -1185,7 +1185,7 @@ export_files <- function(
           head_split[[1]][1] <- paste0(head_split[[1]][1], "_", rrna_gene_uniq)
           head_split[[1]][length(head_split[[1]])] <- paste0(head_split[[1]][length(head_split[[1]])], ", ", cur$product)
           head <- paste(c(head_split[[1]]), sep=" ", collapse=" ")
-          names(gene) <- nmnh_strip_empty(stringr::str_glue_data(dat, head))
+          names(gene) <- header_fill(dat, head)
 
           # reverse complement if needed
           if (cur$direction == "-") {

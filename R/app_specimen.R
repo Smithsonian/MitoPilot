@@ -318,9 +318,10 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL,
       modalDialog(
         title = mp_modal_title(
           tagList("Sample metadata: ", textOutput(ns("hdr_id"), inline = TRUE)),
-          subtitle = tagList("Taxon: ", textOutput(ns("hdr_taxon"), inline = TRUE))
+          subtitle = tagList("Taxon: ", textOutput(ns("hdr_taxon"), inline = TRUE)),
+          close = is.null(on_back)
         ),
-        size = "l", easyClose = TRUE,
+        size = "l", easyClose = is.null(on_back),
         fluidRow(
           column(3,
             selectInput(ns("sample"), "Sample", choices = stats::setNames(s$ID, lab),
@@ -374,13 +375,13 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL,
         ),
         footer = mp_footer(
           extra = tagList(
-            if (!is.null(on_back)) actionButton(ns("back"), back_label, icon = icon("arrow-left")),
             downloadButton(ns("csv"), "Export CSV", class = "btn-default",
                            title = "Save every metadata field for this sample as a CSV file"),
             actionButton(ns("refresh_all"), "Refresh all",
                          title = "Fetch every sample's GEOME, GBIF, and NCBI records again")
           ),
-          dismiss = "Close"
+          primary = if (!is.null(on_back)) actionButton(ns("back"), back_label, icon = icon("arrow-left")),
+          dismiss = if (is.null(on_back)) "Close"
         )
       ) |> showModal()
     })

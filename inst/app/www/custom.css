@@ -1145,6 +1145,8 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 /* NMNH voucher report: tables scroll inside the window; one button size,
    and the CSV upload shows as a single button */
 .mp-nmnh-scroll { max-height: 35vh; overflow-y: auto; }
+.mp-nmnh-pick { height: 26px; margin-top: 4px; padding: 2px 6px; font-size: 12px; }
+.mp-nmnh-fields { margin-bottom: 8px; font-size: var(--mp-fs-meta); }
 .modal-footer:has(.mp-nmnh-actions) { display: flex; align-items: center; gap: 8px; }
 .mp-nmnh-actions { display: flex; flex-flow: row wrap; gap: 8px; align-items: center; margin-right: auto; }
 .mp-nmnh-actions .btn, .modal-footer:has(.mp-nmnh-actions) > .btn { height: 30px; margin: 0; padding: 4px 10px; font-size: 12px; line-height: 1.5; }

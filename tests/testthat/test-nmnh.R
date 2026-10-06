@@ -49,10 +49,11 @@ test_that("template add, remove, and conflict detection", {
   expect_equal(nmnh_template_remove(edited), edited)
 })
 
-test_that("empty NMNH modifiers are stripped, others kept", {
-  h <- "s1 [organism=X] [specimen_voucher=] [voucherURI= ] [note=] X"
-  expect_equal(nmnh_strip_empty(h), "s1 [organism=X] [note=] X")
-  expect_equal(nmnh_strip_empty("s1 [specimen_voucher=USNM:FISH:1] X"), "s1 [specimen_voucher=USNM:FISH:1] X")
+test_that("modifiers with empty, NA, or absent values are left out", {
+  d <- data.frame(ID = "s1", Taxon = "X", v = "", u = " ", n = NA, k = "USNM:FISH:1")
+  h <- "{ID} [organism={Taxon}] [specimen_voucher={v}] [voucherURI={u}] [note={n}] [country={gone}] {Taxon}"
+  expect_equal(as.character(header_fill(d, h)), "s1 [organism=X] X")
+  expect_equal(as.character(header_fill(d, "{ID} [specimen_voucher={k}] X")), "s1 [specimen_voucher=USNM:FISH:1] X")
 })
 
 test_that("duplicate NMNH modifiers block the header", {
@@ -275,4 +276,28 @@ test_that("an edited voucher CSV loads into nmnh_vouchers only", {
   st <- DBI::dbReadTable(con, "nmnh_vouchers")
   expect_equal(st$specimen_voucher_source[st$ID == "s1"], "upload")
   expect_false(any(c("specimen_voucher", "voucherURI") %in% DBI::dbListFields(con, "samples")))
+})
+
+test_that("not-NMNH samples skip checks and chosen fields replace automatic sources", {
+  con <- nmnh_db(data.frame(ID = c("s1", "s2"), Taxon = "X", voucher = c("MCZ:Ich:1", "USNM:FISH:1"),
+                            alt = c("KU:5", "USNM:FISH:2"), uri = NA_character_))
+  on.exit(DBI::dbDisconnect(con))
+  nmnh_set_not_nmnh(con, "s1", TRUE)
+  r <- nmnh_resolve(con, c("s1", "s2"), online = FALSE, save = FALSE)
+  expect_true(r$ok[1])
+  expect_true(r$not_nmnh[1])
+  expect_equal(r$nmnh_specimen_voucher[1], "MCZ:Ich:1")
+  expect_true(is.na(r$nmnh_voucherURI[1]))
+  expect_false(r$ok[2])
+  expect_null(nmnh_edit_value(con, "s1", "uri", "https://example.org/1"))
+  nmnh_set_field(con, "s1", "voucher", "map:alt")
+  nmnh_set_field(con, "s2", "voucher", "map:alt")
+  r <- nmnh_resolve(con, c("s1", "s2"), online = FALSE, save = FALSE)
+  expect_equal(r$nmnh_specimen_voucher, c("KU:5", "USNM:FISH:2"))
+  expect_equal(r$nmnh_voucherURI[1], "https://example.org/1")
+  expect_equal(r$voucher_source[2], "field:map:alt")
+  expect_true("map:alt" %in% nmnh_field_choices(con))
+  nmnh_set_not_nmnh(con, "s1", FALSE)
+  r <- nmnh_resolve(con, "s1", online = FALSE, save = FALSE)
+  expect_false(r$ok)
 })
