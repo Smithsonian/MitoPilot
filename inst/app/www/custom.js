@@ -234,6 +234,7 @@ function mpTokenFlags(modal) {
     $(this).toggleClass('mp-token-missing', m > 0);
     this.title = m > 0 ? base + '\nMissing for ' + m + ' of ' + n + ' records in this group' : base;
   });
+  modal.find('textarea.mp-hl').each(function() { mpHlRender(this); });
 }
 $(document).on('change', 'select[id$="export_group"]', function() {
   mpTokenFlags($(this).closest('.modal'));
@@ -268,14 +269,18 @@ function mpTokMap(modal) {
   modal.find('.mp-token-group').each(function() {
     var src = (this.className.match(/mp-src-(\w+)/) || [])[1] || 'other';
     $(this).find('.mp-token-chip').each(function() {
+      var miss = this.classList.contains('mp-token-missing');
       (this.getAttribute('data-insert').match(/\{[^{}]*\}/g) || []).forEach(function(t) {
-        if (!(t in m)) m[t] = src;
+        if (!(t in m)) m[t] = {src: src, miss: miss};
       });
     });
   });
   return m;
 }
-function mpTokSrc(map, t) { return /^\{nmnh_/.test(t) ? 'nmnh' : (map[t] || 'other'); }
+function mpTokSrc(map, t) {
+  var src = /^\{nmnh_/.test(t) ? 'nmnh' : (map[t] ? map[t].src : 'other');
+  return 'mp-src-' + src + (map[t] && map[t].miss ? ' mp-hl-miss' : '');
+}
 function mpHlRender(box) {
   var back = box.previousElementSibling;
   if (!back || !back.classList.contains('mp-hl-back')) return;
@@ -289,7 +294,7 @@ function mpHlRender(box) {
   var esc = box.value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   back.innerHTML = esc
     .replace(/\[[^\[\]{}=]*=/g, '<span class="mp-hl-mod">$&</span>')
-    .replace(/\{[^{}]*\}/g, function(t) { return '<mark class="mp-src-' + mpTokSrc(map, t) + '">' + t + '</mark>'; }) + '\n';
+    .replace(/\{[^{}]*\}/g, function(t) { return '<mark class="' + mpTokSrc(map, t) + '">' + t + '</mark>'; }) + '\n';
   back.scrollTop = box.scrollTop;
 }
 function mpHlInit(modal) {
@@ -318,7 +323,10 @@ $(document).on('shiny:value', function(e) {
     var el = $(document.getElementById(e.name));
     var map = mpTokMap(el.closest('.modal'));
     el.find('.mp-hl-tok[data-tok]').each(function() {
-      this.classList.add('mp-src-' + mpTokSrc(map, this.getAttribute('data-tok')));
+      this.className += ' ' + mpTokSrc(map, this.getAttribute('data-tok'));
     });
   }, 0);
 });
+
+// A "?" inside a <summary> opens its popover without folding the section
+$(document).on('click', 'summary .mp-help-icon', function(e) { e.preventDefault(); });

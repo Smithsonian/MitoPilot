@@ -680,9 +680,8 @@ export_server <- function(id) {
       nmnh_choices <- c("(none: look up from GBIF, NCBI, or GEOME)" = "",
                         setdiff(sample_cols, c("ID", "Taxon", "R1", "R2")))
       cols_help <- tags$details(
-        class = "mp-meta-panel",
-        meta_panel_summary(token_groups),
-        opts_help(
+        class = "mp-meta-panel", open = NA,
+        meta_panel_summary(token_groups, tagList(
           "Click a column to insert it at the cursor of the header box you last clicked. ",
           "Write a column name in braces to use its value, for example ",
           tags$code("{Taxon}"), ". ", tags$code("{seqid}"), " is the record ",
@@ -690,9 +689,8 @@ export_server <- function(id) {
           tags$code("ID_p<path>_s<scaffold>"), " when one sample exports more ",
           "than one record. Columns from your mapping file work here even ",
           "when the table does not show them. Orange columns are empty for ",
-          "some records in the chosen export group; hover one for the count.",
-          nested = TRUE
-        ),
+          "some records in the chosen export group; hover one for the count."
+        )),
         export_token_ui(token_groups, target_id = ns("fasta_header"), ns = ns,
                         totals = jsonlite::toJSON(as.list(table(grouped$export_group)),
                                                   auto_unbox = TRUE)),
@@ -712,7 +710,7 @@ export_server <- function(id) {
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
           textAreaInput(ns(id), tagList(label, insert_field_link(ns(id))), value, width = "100%")
-        )$find("textarea")$addClass("mp-hl")$addAttrs(
+        )$find("textarea")$addClass("mp-hl")$addAttrs(spellcheck = "false", autocomplete = "off", 
           `aria-describedby` = ns(paste0(id, "_status"))
         )$before(uiOutput(ns(paste0(id, "_status"))))$after(
           tags$details(class = "mp-hdr-preview", open = NA,
@@ -723,8 +721,10 @@ export_server <- function(id) {
         title = mp_modal_title(
           tagList("Export data", uiOutput(ns("export_gears"), inline = TRUE))
         ),
-        size = "l",
+        size = "xl",
         class = "mp-modal-form",
+        # Options and headers on the left, Available metadata pinned on the right
+        div(class = "mp-export-split", div(class = "mp-export-main",
         # Export group + header-template selector + Save, one row.
         div(
           style = "display: flex; flex-flow: row nowrap; gap: 1em;",
@@ -818,7 +818,6 @@ export_server <- function(id) {
           opts_help("The gene name is added to this header automatically.",
                     nested = TRUE)
         ),
-        cols_help,
         mp_checkbox(
           ns("include_alignments"),
           "Generate group-level PCG alignment summary",
@@ -875,7 +874,8 @@ export_server <- function(id) {
               )
             )
           )
-        ),
+        )),
+        div(class = "mp-export-side", cols_help)),
         footer = mp_footer(
           primary = actionButton(ns("export_data"), "Export"),
           dismiss = "Cancel"

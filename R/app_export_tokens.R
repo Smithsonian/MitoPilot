@@ -59,14 +59,17 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
     } else {
       tok(character(), character())
     }
-    list(tokens = rbind(plain(id_col), ticked), n = nrow(ticked))
+    # the ID column joins its database group only when that group is in use;
+    # otherwise it stays with the mapping columns
+    list(tokens = if (nrow(ticked)) rbind(plain(id_col), ticked) else ticked,
+         n = nrow(ticked), id = if (nrow(ticked)) id_col)
   }
   pick_hint <- "Nothing ticked yet. Use Choose fields, or the Export column of the Metadata button."
   csv <- setdiff(export_metadata_cols(sample_cols, character()), EXPORT_TOKEN_BASICS)
   geome <- meta("geome", "GEOME_BCID")
   gbif <- meta("gbif", "GBIF_ID")
   ncbi <- meta("ncbi", "BioSample")
-  csv_tokens <- plain(csv)
+  csv_tokens <- plain(setdiff(csv, c(geome$id, gbif$id, ncbi$id)))
   list(
     Basics = list(open = TRUE, tokens = plain(EXPORT_TOKEN_BASICS), hint = NULL),
     `Your mapfile columns` = list(
@@ -85,10 +88,11 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
 
 #' Summary line for the Available metadata panel, with the field count
 #' @noRd
-meta_panel_summary <- function(groups) {
+meta_panel_summary <- function(groups, help = NULL) {
   n <- sum(vapply(groups, function(x) nrow(x$tokens), integer(1)))
   tags$summary(icon("database"), " Available metadata",
-               if (n) span(class = "mp-meta-count", sprintf(" (%d fields)", n)))
+               if (n) span(class = "mp-meta-count", sprintf(" (%d fields)", n)),
+               if (!is.null(help)) mp_help_tip(help, label = "Available metadata"))
 }
 
 #' Link beside a header box label that opens the Available metadata panel

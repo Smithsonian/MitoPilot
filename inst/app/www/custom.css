@@ -1048,21 +1048,17 @@ details.mp-meta-panel > summary { border-bottom: none; }
 .mp-insert-field { margin-left: 0.5em; }
 
 /* Field colours by source, shared by header pills, preview, and the
-   Available metadata groups */
-.mp-src-basic    { --mp-src-bg: #e9ecef; --mp-src-fg: #6c757d; }
-.mp-src-mapfile  { --mp-src-bg: #dff0d8; --mp-src-fg: #3c763d; }
-.mp-src-geome    { --mp-src-bg: #ebe3f5; --mp-src-fg: #6f42c1; }
-.mp-src-gbif     { --mp-src-bg: #d4efe9; --mp-src-fg: #138a72; }
-.mp-src-ncbi     { --mp-src-bg: #dbe7f6; --mp-src-fg: #2a6cb5; }
-.mp-src-pipeline { --mp-src-bg: #f3ead9; --mp-src-fg: #8a6d3b; }
-.mp-src-nmnh     { --mp-src-bg: #ffeeb0; --mp-src-fg: #b38f00; }
+   Available metadata group dots. Colour-blind safe (Tol/Okabe-Ito); orange is
+   kept for "missing" only. */
+.mp-src-basic, .mp-src-pipeline, .mp-src-nmnh { --mp-src-bg: #ffffff; --mp-src-fg: #777777; }
+.mp-src-mapfile  { --mp-src-bg: #a0c9ad; --mp-src-fg: #117733; }
+.mp-src-gbif     { --mp-src-bg: #cfa7bb; --mp-src-fg: #882255; }
+.mp-src-ncbi     { --mp-src-bg: #ada7cf; --mp-src-fg: #332288; }
+.mp-src-geome    { --mp-src-bg: #bbe1f6; --mp-src-fg: #56B4E9; }
 .mp-src-other    { --mp-src-bg: transparent; --mp-src-fg: #999999; }
 .mp-src-dot {
   display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%;
   margin-right: 0.4em; background: var(--mp-src-fg);
-}
-.mp-token-group .mp-token-chip:not(.mp-token-missing) {
-  background: var(--mp-src-bg); border-color: var(--mp-src-fg);
 }
 
 .mp-hl-wrap { position: relative; }
@@ -1078,6 +1074,7 @@ details.mp-meta-panel > summary { border-bottom: none; }
   background: var(--mp-src-bg); box-shadow: 0 0 0 1px var(--mp-src-fg);
 }
 .mp-hl-back mark.mp-src-other { box-shadow: none; border-bottom: 1px dashed var(--mp-src-fg); }
+.mp-hl-back mark.mp-hl-miss, .mp-hl-tok.mp-hl-miss { border-bottom: 3px solid #E69F00; }
 .mp-hl-mod { background: var(--mp-surface-alt); border-radius: 3px; }
 
 details.mp-hdr-preview { margin: 2px 0 8px; }
@@ -1107,3 +1104,16 @@ details.mp-nmnh-cols > summary {
 }
 details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 .mp-nmnh-status { font-size: var(--mp-fs-meta); margin-top: 4px; }
+
+/* Export window: options and headers left, Available metadata pinned right */
+.mp-export-split { display: flex; flex-flow: row nowrap; gap: 1.5em; align-items: flex-start; }
+.mp-export-main { flex: 3 1 0; min-width: 0; }
+.mp-export-side {
+  flex: 2 1 0; min-width: 0; position: sticky; top: 0;
+  max-height: calc(70vh - 32px); overflow-y: auto;
+}
+.mp-export-side details.mp-meta-panel { margin-bottom: 0; }
+@media (max-width: 991px) {
+  .mp-export-split { flex-flow: column nowrap; }
+  .mp-export-side { position: static; max-height: none; }
+}
