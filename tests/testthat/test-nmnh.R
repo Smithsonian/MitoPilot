@@ -297,7 +297,25 @@ test_that("not-NMNH samples skip checks and chosen fields replace automatic sour
   expect_equal(r$nmnh_voucherURI[1], "https://example.org/1")
   expect_equal(r$voucher_source[2], "field:map:alt")
   expect_true("map:alt" %in% nmnh_field_choices(con))
+  nmnh_set_field(con, "s1", "voucher", "none")
+  r <- nmnh_resolve(con, "s1", online = FALSE, save = FALSE)
+  expect_true(is.na(r$nmnh_specimen_voucher))
+  expect_true(r$ok)
   nmnh_set_not_nmnh(con, "s1", FALSE)
   r <- nmnh_resolve(con, "s1", online = FALSE, save = FALSE)
   expect_false(r$ok)
+})
+
+test_that("the NMNH user switch is remembered per project", {
+  con <- nmnh_db(data.frame(ID = "s1", Taxon = "X"))
+  on.exit(DBI::dbDisconnect(con))
+  t <- "{seqid} [organism={Taxon}] title"
+  expect_false(nmnh_user_pref(con))
+  expect_equal(nmnh_template_pref(con, t), t)
+  nmnh_set_user_pref(con, TRUE)
+  expect_true(nmnh_template_on(nmnh_template_pref(con, t)))
+  own <- "{seqid} [specimen_voucher={v}] title"
+  expect_equal(nmnh_template_pref(con, own), own)
+  nmnh_set_user_pref(con, FALSE)
+  expect_equal(nmnh_template_pref(con, t), t)
 })

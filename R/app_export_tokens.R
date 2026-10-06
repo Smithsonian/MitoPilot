@@ -95,12 +95,6 @@ meta_panel_summary <- function(groups, help = NULL) {
                if (!is.null(help)) mp_help_tip(help, label = "Available metadata"))
 }
 
-#' Link beside a header box label that opens the Available metadata panel
-#' @noRd
-insert_field_link <- function(box_id) {
-  tags$a(href = "#", class = "mp-insert-field", `data-box` = box_id, "Insert field")
-}
-
 #' Clickable token chips for the Export Data modal
 #'
 #' @param groups `export_token_groups()` output
