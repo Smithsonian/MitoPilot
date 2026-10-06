@@ -204,7 +204,8 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE) {
                voucher_source = v$source, uri_source = u$source,
                voucher_note = paste(c(v_bad, v$notes), collapse = "; "),
                uri_note = paste(c(u_bad, u$notes), collapse = "; "),
-               ok = !length(c(v_bad, u_bad)), fixed = v$fixed || u$fixed || length(c(v$notes, u$notes)) > 0,
+               ok = !length(c(v_bad, u_bad)), voucher_ok = !length(v_bad), uri_ok = !length(u_bad),
+               fixed = v$fixed || u$fixed || length(c(v$notes, u$notes)) > 0,
                checked = checked)
   })
   dplyr::as_tibble(do.call(rbind, rows))

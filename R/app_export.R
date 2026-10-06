@@ -1198,6 +1198,8 @@ export_server <- function(id) {
       take_snap()
       r <- nmnh_res()
       fixed <- r[r$ok & r$fixed, , drop = FALSE]
+      nmnh_report_ids(r$ID[!r$ok])
+      nmnh_typed(list())
       modalDialog(
         title = mp_modal_title("NMNH voucher report", close = FALSE),
         size = "l",
@@ -1209,22 +1211,22 @@ export_server <- function(id) {
           "cell and saved to the column chosen in Export data (or a new ",
           tags$code("specimen_voucher"), " / ", tags$code("voucherURI"), " column)."
         ),
-        reactable::reactableOutput(ns("nmnh_table")),
+        div(class = "mp-nmnh-scroll", reactable::reactableOutput(ns("nmnh_table"))),
         if (nrow(fixed)) {
           tags$details(
             tags$summary(sprintf("Auto-fixed (%d)", nrow(fixed))),
-            reactable::reactable(
+            div(class = "mp-nmnh-scroll", reactable::reactable(
               data.frame(ID = fixed$ID,
                          specimen_voucher = fixed$nmnh_specimen_voucher,
                          voucher_note = mapply(nmnh_note, fixed$voucher_source, fixed$voucher_note),
                          voucherURI = fixed$nmnh_voucherURI,
                          uri_note = mapply(nmnh_note, fixed$uri_source, fixed$uri_note)),
               compact = TRUE, pagination = FALSE, wrap = TRUE
-            )
+            ))
           )
         },
         div(
-          style = "display: flex; flex-flow: row wrap; gap: 8px; align-items: flex-start; margin-top: 12px;",
+          class = "mp-nmnh-actions",
           uiOutput(ns("nmnh_copy")),
           actionButton(ns("nmnh_recheck"), "Re-check with GBIF", class = "btn-sm",
                        title = "Ask GBIF again about this group's specimen links"),
@@ -1242,34 +1244,48 @@ export_server <- function(id) {
       r <- req(nmnh_res())
       r[!r$ok, , drop = FALSE]
     })
+    # Rows shown in the report: the problems found when it opened, kept after a
+    # fix so the entry and its check stay visible. Invalid entries are not saved.
+    nmnh_report_ids <- reactiveVal(character(0))
+    nmnh_typed <- reactiveVal(list())
     output$nmnh_table <- reactable::renderReactable({
-      r <- nmnh_problems()
+      r <- req(nmnh_res())
+      r <- r[r$ID %in% nmnh_report_ids(), , drop = FALSE]
+      typed <- nmnh_typed()
       # html = TRUE: reactable drops inline handlers on R tags
-      cell <- function(field, src, note) function(value, index) {
+      cell <- function(field) function(value, index) {
+        bad <- typed[[paste(r$ID[index], field)]]
+        note <- nmnh_note(r[[paste0(field, "_source")]][index], r[[paste0(field, "_note")]][index])
+        st <- if (!is.null(bad)) {
+          list("danger", "circle-xmark", bad$note)
+        } else if (isTRUE(r[[paste0(field, "_ok")]][index])) {
+          list("success", "circle-check", if (nzchar(note)) paste0("Valid (", note, ")") else "Valid")
+        } else {
+          list("danger", "circle-xmark", note)
+        }
         as.character(tagList(
           tags$input(
-            type = "text", class = "form-control input-sm", value = value %|NA|% "",
+            type = "text", class = "form-control input-sm",
+            value = if (!is.null(bad)) bad$value else value %|NA|% "",
             `aria-label` = paste(field, r$ID[index]),
             onchange = sprintf(
               "Shiny.setInputValue('%s', {id: %s, field: '%s', value: this.value}, {priority: 'event'})",
               ns("nmnh_edit"), jsonlite::toJSON(r$ID[index], auto_unbox = TRUE), field)
           ),
-          div(class = if (nzchar(note[index])) "mp-fg-warning",
+          div(class = paste0("mp-fg-", st[[1]]),
               style = "font-size: var(--mp-fs-meta); white-space: normal;",
-              nmnh_note(src[index], note[index]))
+              icon(st[[2]]), " ", st[[3]])
         ))
       }
       reactable::reactable(
         data.frame(ID = r$ID, specimen_voucher = r$nmnh_specimen_voucher,
                    voucherURI = r$nmnh_voucherURI),
-        compact = TRUE, pagination = FALSE, height = 360,
-        language = reactable::reactableLang(noData = "No NMNH problems left."),
+        compact = TRUE, pagination = FALSE,
+        language = reactable::reactableLang(noData = "No NMNH problems."),
         columns = list(
           ID = reactable::colDef(minWidth = 110),
-          specimen_voucher = reactable::colDef(
-            minWidth = 230, html = TRUE, cell = cell("voucher", r$voucher_source, r$voucher_note)),
-          voucherURI = reactable::colDef(
-            minWidth = 330, html = TRUE, cell = cell("uri", r$uri_source, r$uri_note))
+          specimen_voucher = reactable::colDef(minWidth = 230, html = TRUE, cell = cell("voucher")),
+          voucherURI = reactable::colDef(minWidth = 330, html = TRUE, cell = cell("uri"))
         )
       )
     })
@@ -1323,10 +1339,15 @@ export_server <- function(id) {
     observeEvent(input$nmnh_edit, {
       e <- input$nmnh_edit
       n <- if (e$field == "voucher") nmnh_normalize_voucher(e$value) else nmnh_normalize_uri(e$value)
+      t <- nmnh_typed()
+      key <- paste(e$id, e$field)
       if (is.na(n$value)) {
-        mp_toast(paste0(e$id, ": ", n$note), "error")
+        t[[key]] <- list(value = e$value, note = n$note)
+        nmnh_typed(t)
         return()
       }
+      t[[key]] <- NULL
+      nmnh_typed(t)
       con <- session$userData$con
       col <- nmnh_target_col(con, e$field)
       DBI::dbExecute(con, paste0("UPDATE samples SET \"", col, "\" = ? WHERE ID = ?"),

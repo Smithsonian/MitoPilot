@@ -1145,3 +1145,15 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 .mp-nmnh-toggle .pretty input:focus-visible ~ .state .nmnh-logo {
   outline: 2px solid var(--mp-primary); outline-offset: 2px; border-radius: 50%;
 }
+
+/* NMNH voucher report: tables scroll inside the window; one button size,
+   and the CSV upload shows as a single button */
+.mp-nmnh-scroll { max-height: 35vh; overflow-y: auto; }
+.mp-nmnh-actions { display: flex; flex-flow: row wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.mp-nmnh-actions .btn { height: 30px; margin: 0; padding: 4px 10px; font-size: 12px; line-height: 1.5; }
+.mp-nmnh-actions .shiny-input-container { width: auto !important; margin-bottom: 0; }
+.mp-nmnh-actions .shiny-input-container > label { display: none; }
+.mp-nmnh-actions .input-group, .mp-nmnh-actions .input-group-btn { display: flex; margin: 0; }
+.mp-nmnh-actions .input-group .form-control { display: none; }
+.mp-nmnh-actions .input-group-btn, .mp-nmnh-actions .input-group-btn .btn { border-radius: 3px; }
+.mp-nmnh-actions .shiny-file-input-progress { display: none !important; }
