@@ -1170,13 +1170,15 @@ export_server <- function(id) {
       r <- nmnh_res()
       if (is.null(r)) return(span(class = "text-muted", "Checking NMNH values..."))
       bad <- sum(!r$ok)
-      skipped <- if (any(!is.na(r$nmnh_voucherURI) & !r$checked)) {
+      skipped <- if (any(!is.na(r$nmnh_voucherURI) & !r$checked & !r$not_nmnh)) {
         " GBIF could not be reached, so the specimen check was skipped."
       }
       if (bad == 0) {
+        n_not <- sum(r$not_nmnh)
         return(div(class = "mp-nmnh-status mp-fg-success",
-                   icon("circle-check"), sprintf(" All %s ready. ", mp_n(nrow(r), "sample")),
-                   if (any(r$fixed)) actionLink(ns("nmnh_report"), "See what was auto-fixed"), skipped))
+                   icon("circle-check"), sprintf(" All %s ready%s. ", mp_n(nrow(r), "sample"),
+                                                 if (n_not) sprintf(" (%d marked Not NMNH)", n_not) else ""),
+                   actionLink(ns("nmnh_report"), "Review NMNH values"), skipped))
       }
       div(class = "mp-nmnh-status mp-fg-warning",
           icon("triangle-exclamation"),
@@ -1201,7 +1203,9 @@ export_server <- function(id) {
       take_snap()
       r <- nmnh_res()
       fixed <- r[r$ok & r$fixed, , drop = FALSE]
-      nmnh_report_ids(r$ID[!r$ok | r$not_nmnh])
+      ids <- r$ID[!r$ok | r$not_nmnh]
+      # nothing to fix: list every sample so its values can still be revised
+      nmnh_report_ids(if (length(ids)) ids else r$ID)
       nmnh_typed(list())
       modalDialog(
         title = mp_modal_title("NMNH voucher report", close = FALSE),
