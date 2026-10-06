@@ -660,7 +660,7 @@ export_server <- function(id) {
       snap <- rv$export_snap
       rv$export_snap <- NULL
       tmpl_choices <- list_export_templates(con)
-      sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
+      sel_tmpl <- if (export_last_template(con) %in% tmpl_choices) export_last_template(con) else "default"
       rv$export_template <- sel_tmpl
       opts <- get_export_opts(con, sel_tmpl)
       if (!is.null(snap)) {
@@ -668,6 +668,7 @@ export_server <- function(id) {
         sel_tmpl <- snap$template_select %||% sel_tmpl
         opts$fasta_header <- snap$fasta_header %||% opts$fasta_header
         opts$fasta_header_gene <- snap$fasta_header_gene %||% opts$fasta_header_gene
+        rv$export_template <- sel_tmpl
       } else {
         opts$fasta_header <- nmnh_template_pref(con, opts$fasta_header)
       }
@@ -986,14 +987,17 @@ export_server <- function(id) {
     observeEvent(input$template_select, {
       req(input$template_select)
       name <- input$template_select
+      # the dropdown reports its value when the window opens; only a change reloads
+      if (identical(name, rv$export_template)) return()
       rv$export_template <- name
       con <- session$userData$con
+      # The template decides NMNH user; the project setting follows it
       if (name %in% list_export_templates(con)) {
         o <- get_export_opts(con, name)
-        updateTextAreaInput(session, "fasta_header", value = nmnh_template_pref(con, o$fasta_header))
-        updateTextAreaInput(session, "fasta_header_gene", value = if (isTRUE(input$export_genes)) {
-          nmnh_template_pref(con, o$fasta_header_gene)
-        } else o$fasta_header_gene)
+        export_set_last_template(con, name)
+        nmnh_set_user_pref(con, nmnh_template_on(o$fasta_header))
+        updateTextAreaInput(session, "fasta_header", value = o$fasta_header)
+        updateTextAreaInput(session, "fasta_header_gene", value = o$fasta_header_gene)
       }
     }, ignoreInit = TRUE)
 
@@ -1029,6 +1033,7 @@ export_server <- function(id) {
         options = list(create = TRUE, maxItems = 1)
       )
       rv$export_template <- name
+      export_set_last_template(con, name)
       mp_toast(sprintf("Saved header template \"%s\".", name))
     })
 

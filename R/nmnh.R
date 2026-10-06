@@ -37,6 +37,18 @@ nmnh_set_user_pref <- function(con, on) {
   invisible(isTRUE(on))
 }
 
+# Project setting: the header template last picked in Export Data
+export_last_template <- function(con) {
+  .meta_ensure_tables(con)
+  DBI::dbGetQuery(con, "SELECT value FROM meta_options WHERE key = 'export_template'")$value[1] %|NA|% "default"
+}
+
+export_set_last_template <- function(con, name) {
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_options VALUES ('export_template', ?)", params = list(name))
+  invisible(name)
+}
+
 # A header with the NMNH tokens added when the switch is remembered on, unless
 # it already carries voucher modifiers of its own
 nmnh_template_pref <- function(con, template) {

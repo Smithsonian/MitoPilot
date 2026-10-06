@@ -318,4 +318,7 @@ test_that("the NMNH user switch is remembered per project", {
   expect_equal(nmnh_template_pref(con, own), own)
   nmnh_set_user_pref(con, FALSE)
   expect_equal(nmnh_template_pref(con, t), t)
+  expect_equal(export_last_template(con), "default")
+  export_set_last_template(con, "museum")
+  expect_equal(export_last_template(con), "museum")
 })
