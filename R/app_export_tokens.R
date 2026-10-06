@@ -115,8 +115,9 @@ export_token_ui <- function(groups, target_id, ns, totals = "{}") {
         tagList(" ", actionLink(ns(paste0("token_fields_", tolower(g))), "Choose fields"))
       }
       tags$details(
-        open = if (isTRUE(x$open)) NA else NULL, class = "mp-token-group",
-        tags$summary(g, link),
+        open = if (isTRUE(x$open)) NA else NULL,
+        class = paste0("mp-token-group mp-src-", token_src_slug(g)),
+        tags$summary(span(class = "mp-src-dot"), g, link),
         if (!is.null(x$hint)) p(class = "text-muted mp-token-hint", x$hint),
         div(class = "mp-token-chips", lapply(seq_len(nrow(x$tokens)), function(i) {
           tip <- paste0("Inserts ", x$tokens$insert[i],
@@ -130,4 +131,52 @@ export_token_ui <- function(groups, target_id, ns, totals = "{}") {
       )
     })
   )
+}
+
+#' Colour key for a token group in the Available metadata panel
+#' @noRd
+token_src_slug <- function(group) {
+  switch(group, Basics = "basic", GEOME = "geome", GBIF = "gbif", NCBI = "ncbi",
+         if (grepl("map", group, ignore.case = TRUE)) "mapfile" else "pipeline")
+}
+
+#' Live preview of a FASTA header template for the first record of `data`
+#' @noRd
+hdr_preview_ui <- function(template, data) {
+  if (is.null(template) || !nzchar(trimws(template))) {
+    return(span(class = "text-muted", "Empty header."))
+  }
+  if (is.null(data) || !nrow(data)) return(span(class = "text-muted", "No records in this group."))
+  row <- data[1, , drop = FALSE]
+  parts <- regmatches(template, gregexpr("\\{[^{}]*\\}", template), invert = NA)[[1]]
+  # one string, since the box keeps whitespace and tag indentation would show
+  body <- vapply(parts[nzchar(parts)], function(p) {
+    if (!grepl("^\\{[^{}]*\\}$", p)) return(htmltools::htmlEscape(p))
+    v <- tryCatch(as.character(stringr::str_glue_data(row, p)), error = function(e) NULL)
+    tok <- if (is.null(v)) {
+      span(class = "mp-hl-tok mp-hl-bad", `data-tok` = p, title = "Unknown field", p)
+    } else if (!length(v) || is.na(v) || !nzchar(v) || v == "NA") {
+      span(class = "mp-hl-tok mp-hl-empty", `data-tok` = p, title = p, "(empty)")
+    } else {
+      span(class = "mp-hl-tok", `data-tok` = p, title = p, v)
+    }
+    as.character(tok)
+  }, character(1))
+  div(class = "mp-hdr-preview-body", title = paste("First record:", row$ID[1]),
+      HTML(paste(body, collapse = "")))
+}
+
+#' Plain-language line saying where NMNH values came from
+#' @noRd
+nmnh_source_text <- function(src, col) {
+  lab <- c(mapfile = if (is.na(col)) "your mapping file" else sprintf("mapping file column \"%s\"", col),
+           entered = "values typed in the report", GBIF = "GBIF", NCBI = "NCBI", GEOME = "GEOME",
+           `derived from voucher` = "GBIF via catalog number",
+           `derived from URI` = "GBIF via specimen link")
+  tab <- table(factor(src[!is.na(src)], levels = names(lab)))
+  tab <- tab[tab > 0]
+  miss <- sum(is.na(src))
+  if (!length(tab)) return("not found. Pick a column below, or add GBIF, NCBI, or GEOME IDs.")
+  paste0("from ", paste(sprintf("%s (%d)", lab[names(tab)], tab), collapse = ", "),
+         if (miss) sprintf("; missing for %d", miss), ".")
 }

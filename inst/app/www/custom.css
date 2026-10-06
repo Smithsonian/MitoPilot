@@ -1030,10 +1030,11 @@ a.mp-link:focus-visible {
 .mp-mv-toggle.active { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2); font-weight: 600; }
 .mp-mv-count { margin-right: auto; }
 
+/* negative margins keep the logo from growing the line, which shifts the box */
 .nmnh-logo {
   height: 1.2em;
-  vertical-align: -0.25em;
-  margin-right: 0.3em;
+  vertical-align: middle;
+  margin: -0.2em 0.3em -0.2em 0;
 }
 
 /* Available metadata panel: tinted so it reads as a resource, not a header */
@@ -1045,3 +1046,64 @@ details.mp-meta-panel > summary { border-bottom: none; }
 .mp-meta-count, .mp-insert-field { font-weight: 400; font-size: var(--mp-fs-meta); }
 .mp-meta-count { color: var(--mp-text-muted); }
 .mp-insert-field { margin-left: 0.5em; }
+
+/* Field colours by source, shared by header pills, preview, and the
+   Available metadata groups */
+.mp-src-basic    { --mp-src-bg: #e9ecef; --mp-src-fg: #6c757d; }
+.mp-src-mapfile  { --mp-src-bg: #dff0d8; --mp-src-fg: #3c763d; }
+.mp-src-geome    { --mp-src-bg: #ebe3f5; --mp-src-fg: #6f42c1; }
+.mp-src-gbif     { --mp-src-bg: #d4efe9; --mp-src-fg: #138a72; }
+.mp-src-ncbi     { --mp-src-bg: #dbe7f6; --mp-src-fg: #2a6cb5; }
+.mp-src-pipeline { --mp-src-bg: #f3ead9; --mp-src-fg: #8a6d3b; }
+.mp-src-nmnh     { --mp-src-bg: #ffeeb0; --mp-src-fg: #b38f00; }
+.mp-src-other    { --mp-src-bg: transparent; --mp-src-fg: #999999; }
+.mp-src-dot {
+  display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%;
+  margin-right: 0.4em; background: var(--mp-src-fg);
+}
+.mp-token-group .mp-token-chip:not(.mp-token-missing) {
+  background: var(--mp-src-bg); border-color: var(--mp-src-fg);
+}
+
+.mp-hl-wrap { position: relative; }
+.mp-hl-wrap textarea.mp-hl { position: relative; z-index: 1; background: transparent; }
+.mp-hl-back {
+  position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  white-space: pre-wrap; overflow-wrap: break-word; color: transparent;
+  border-style: solid; border-color: transparent; border-radius: var(--mp-radius);
+  background: var(--mp-surface);
+}
+.mp-hl-back mark {
+  color: transparent; padding: 0; border-radius: 3px;
+  background: var(--mp-src-bg); box-shadow: 0 0 0 1px var(--mp-src-fg);
+}
+.mp-hl-back mark.mp-src-other { box-shadow: none; border-bottom: 1px dashed var(--mp-src-fg); }
+.mp-hl-mod { background: var(--mp-surface-alt); border-radius: 3px; }
+
+details.mp-hdr-preview { margin: 2px 0 8px; }
+details.mp-hdr-preview > summary {
+  font-size: var(--mp-fs-meta); font-weight: 400; color: var(--mp-text-muted);
+  border-bottom: none; padding: 0; margin: 2px 0;
+}
+.mp-hdr-preview-body {
+  font-family: var(--bs-font-monospace, monospace); font-size: var(--mp-fs-meta);
+  white-space: pre-wrap; word-break: break-all; max-height: 5.5em; overflow: auto;
+  padding: 4px 8px; background: var(--mp-surface-alt); border-radius: var(--mp-radius);
+}
+.mp-hl-tok { border-radius: 3px; padding: 0 2px; background: var(--mp-src-bg, transparent); }
+.mp-hl-empty { font-style: italic; color: var(--mp-warning); }
+.mp-hl-bad { color: var(--mp-danger, #a94442); text-decoration: underline wavy; }
+
+/* NMNH section: where each value comes from, then the ready count */
+.mp-nmnh-card {
+  margin: 4px 0 12px 26px; padding: 8px 12px; border-left: 3px solid #ffcd00;
+  background: var(--mp-surface-alt); border-radius: var(--mp-radius);
+}
+.mp-nmnh-sources { font-size: var(--mp-fs-meta); }
+.mp-nmnh-sources > div { margin: 2px 0; }
+details.mp-nmnh-cols { margin: 4px 0; }
+details.mp-nmnh-cols > summary {
+  font-size: var(--mp-fs-meta); font-weight: 400; border-bottom: none; padding: 0;
+}
+details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
+.mp-nmnh-status { font-size: var(--mp-fs-meta); margin-top: 4px; }
