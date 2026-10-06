@@ -118,3 +118,31 @@ mp_checkbox <- function(inputId, label, value = FALSE, ...) {
   htmltools::tagQuery(x)$find("input")$addAttrs(`aria-label` = lab)$allTags()
 }
 
+
+#' Orientation line above the toolbar: app, version, project, Help
+#'
+#' @param badge optional workflow label (user assemblies)
+#' @param gaps schema gaps; when present the header says the database needs updating
+#' @noRd
+mp_app_header <- function(dir, badge = NULL, gaps = NULL) {
+  proj <- normalizePath(dir, mustWork = FALSE)
+  div(
+    class = "mp-header",
+    tags$span(class = "mp-app-name", "MitoPilot"),
+    tags$span(class = "mp-app-ver", paste0("v", utils::packageVersion("MitoPilot"))),
+    tags$span(class = "mp-proj", title = proj, basename(proj)),
+    if (!is.null(badge)) tags$span(class = "mp-badge", badge),
+    if (length(gaps)) {
+      tags$span(
+        class = "mp-header-warn", role = "alert",
+        icon("triangle-exclamation"), " Project database needs updating. Run ",
+        tags$code("MitoPilot::backwards_compatibility(update_config = FALSE)"),
+        " in the project folder, then reopen."
+      )
+    },
+    tags$a(
+      class = "mp-help", href = "https://smithsonian.github.io/MitoPilot/",
+      target = "_blank", rel = "noopener", "Help"
+    )
+  )
+}

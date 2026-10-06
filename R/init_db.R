@@ -884,6 +884,7 @@ new_db <- function(
   )
 
   if (isTRUE(link_sources)) .meta_set_link_enabled(con, TRUE)
+  .nmnh_ensure_table(con)
   .meta_fetch_new(con, mapping, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_ncbi),
                   link = isTRUE(link_sources))
 

@@ -31,6 +31,7 @@ app_server <- function(input, output, session) {
   # in place, which is not something to do silently to someone's project.
   gaps <- schema_gaps(session$userData$con)
   if (length(gaps) > 0) {
+    output$app_header <- renderUI(mp_app_header(session$userData$dir, gaps = gaps))
     mp_alert(
       title = "Project database needs updating",
       text = shiny::tags$div(
@@ -178,19 +179,8 @@ app_server <- function(input, output, session) {
   session$userData$gcode <- Biostrings::getGeneticCode(session$userData$genetic_code)
 
   # Orientation line: app, version, project (full path on hover), Help.
-  output$app_header <- renderUI({
-    proj <- normalizePath(session$userData$dir, mustWork = FALSE)
-    div(
-      class = "mp-header",
-      tags$span(class = "mp-app-name", "MitoPilot"),
-      tags$span(class = "mp-app-ver", paste0("v", utils::packageVersion("MitoPilot"))),
-      tags$span(class = "mp-proj", title = proj, basename(proj)),
-      tags$a(
-        class = "mp-help", href = "https://smithsonian.github.io/MitoPilot/",
-        target = "_blank", rel = "noopener", "Help"
-      )
-    )
-  })
+  output$app_header <- renderUI(mp_app_header(session$userData$dir))
+
 
   # View mode ----
   observeEvent(input$mode, {

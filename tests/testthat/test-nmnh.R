@@ -160,13 +160,13 @@ test_that("resolve follows source priority and cross-fills", {
   expect_equal(r$nmnh_voucherURI[2], bird_ark)
   expect_match(r$uri_note[2], "tissue ARK replaced")
   expect_equal(r$nmnh_specimen_voucher[2], "USNM:Birds:666459")
-  expect_equal(r$voucher_source[2], "derived from URI")
+  expect_equal(r$voucher_source[2], "GBIF via specimen link")
   expect_true(r$ok[2] && r$fixed[2])
   # s3: voucher derived from URI
   expect_equal(r$nmnh_specimen_voucher[3], "USNM:FISH:487075")
   # s4: URI derived from voucher
   expect_equal(r$nmnh_voucherURI[4], spec_ark)
-  expect_equal(r$uri_source[4], "derived from voucher")
+  expect_equal(r$uri_source[4], "GBIF via catalog number")
   # s5: NCBI voucher, ARK found in any attribute
   expect_equal(r$voucher_source[5], "NCBI")
   expect_equal(r$nmnh_voucherURI[5], spec_ark)
@@ -234,4 +234,45 @@ test_that("export writes NMNH values and drops the empty modifier", {
 test_that("missing_fields leaves NMNH tokens to the NMNH status line", {
   d <- data.frame(ID = "a", nmnh_voucherURI = "")
   expect_null(missing_fields("{ID} [voucherURI={nmnh_voucherURI}]", d))
+})
+
+test_that("user values live in nmnh_vouchers and win over automatic ones", {
+  samples <- data.frame(ID = c("s1", "s2"), Taxon = "Fundulus majalis",
+                        catalog_no = c("USNM:FISH:1", NA))
+  con <- nmnh_db(samples)
+  on.exit(DBI::dbDisconnect(con))
+  nmnh_set_columns(con, "catalog_no", "")
+  r <- nmnh_resolve(con, samples$ID, online = FALSE)
+  expect_equal(r$voucher_source[1], "mapfile:catalog_no")
+  st <- DBI::dbReadTable(con, "nmnh_vouchers")
+  expect_equal(st$specimen_voucher_source[st$ID == "s1"], "mapfile:catalog_no")
+
+  expect_null(nmnh_edit_value(con, "s1", "voucher", "USNM:FISH:99"))
+  expect_match(nmnh_edit_value(con, "s2", "voucher", "nonsense"), "not a voucher")
+  r <- nmnh_resolve(con, samples$ID, online = FALSE)
+  expect_equal(r$nmnh_specimen_voucher[1], "USNM:FISH:99")
+  expect_equal(r$voucher_source[1], "entered")
+  # the mapping-file column is read, never written
+  expect_equal(DBI::dbGetQuery(con, "SELECT catalog_no FROM samples WHERE ID = 's1'")[[1]], "USNM:FISH:1")
+
+  # clearing goes back to automatic
+  expect_null(nmnh_edit_value(con, "s1", "voucher", ""))
+  r <- nmnh_resolve(con, samples$ID, online = FALSE)
+  expect_equal(r$voucher_source[1], "mapfile:catalog_no")
+})
+
+test_that("an edited voucher CSV loads into nmnh_vouchers only", {
+  samples <- data.frame(ID = c("s1", "s2"), Taxon = "Fundulus majalis")
+  con <- nmnh_db(samples)
+  on.exit(DBI::dbDisconnect(con))
+  f <- withr::local_tempfile(fileext = ".csv")
+  utils::write.csv(data.frame(ID = c("s1", "s2", "zz"), Taxon = "x",
+                              specimen_voucher = c("USNM:FISH:5", "bad", "USNM:FISH:6"),
+                              voucherURI = ""), f, row.names = FALSE)
+  res <- nmnh_upload_csv(con, f)
+  expect_equal(res$ids, "s1")
+  expect_length(res$bad, 2)
+  st <- DBI::dbReadTable(con, "nmnh_vouchers")
+  expect_equal(st$specimen_voucher_source[st$ID == "s1"], "upload")
+  expect_false(any(c("specimen_voucher", "voucherURI") %in% DBI::dbListFields(con, "samples")))
 })

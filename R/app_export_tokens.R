@@ -172,15 +172,12 @@ hdr_preview_ui <- function(template, data) {
 
 #' Plain-language line saying where NMNH values came from
 #' @noRd
-nmnh_source_text <- function(src, col) {
-  lab <- c(mapfile = if (is.na(col)) "your mapping file" else sprintf("mapping file column \"%s\"", col),
-           entered = "values typed in the report", GBIF = "GBIF", NCBI = "NCBI", GEOME = "GEOME",
-           `derived from voucher` = "GBIF via catalog number",
-           `derived from URI` = "GBIF via specimen link")
-  tab <- table(factor(src[!is.na(src)], levels = names(lab)))
-  tab <- tab[tab > 0]
+nmnh_source_text <- function(src) {
+  tab <- table(factor(src[!is.na(src)], levels = unique(src[!is.na(src)])))
   miss <- sum(is.na(src))
-  if (!length(tab)) return("not found yet. Add GBIF, NCBI, or GEOME IDs to your samples, or pick a mapping file column below.")
-  paste0("from ", paste(sprintf("%s (%d)", lab[names(tab)], tab), collapse = ", "),
+  if (!length(tab)) {
+    return("not found yet. Add GBIF, NCBI, or GEOME IDs to your samples, or pick a mapping file column below.")
+  }
+  paste0("from ", paste(sprintf("%s (%d)", nmnh_source_label(names(tab)), tab), collapse = ", "),
          if (miss) sprintf("; missing for %d", miss), ".")
 }

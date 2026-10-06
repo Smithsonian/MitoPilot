@@ -1157,3 +1157,7 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 .mp-nmnh-actions .input-group .form-control { display: none; }
 .mp-nmnh-actions .input-group-btn, .mp-nmnh-actions .input-group-btn .btn { border-radius: 3px; }
 .mp-nmnh-actions .shiny-file-input-progress { display: none !important; }
+
+/* Database check failed: say so in the header, since the app stops loading */
+.mp-header .mp-header-warn { color: var(--mp-warning); font-weight: 600; }
+.mp-header .mp-header-warn code { font-weight: 400; }

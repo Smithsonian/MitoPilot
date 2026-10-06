@@ -133,8 +133,96 @@ nmnh_set_columns <- function(con, voucher = NA, uri = NA) {
   if (length(a)) paste0("http://n2t.net/", a[1]) else NA_character_
 }
 
-nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE) {
+# Per-sample NMNH values. The only place NMNH edits land: mapping-file
+# columns are read, never written.
+.nmnh_ensure_table <- function(con) {
+  DBI::dbExecute(con, paste(
+    "CREATE TABLE IF NOT EXISTS nmnh_vouchers (ID TEXT PRIMARY KEY,",
+    "specimen_voucher TEXT, specimen_voucher_source TEXT,",
+    "voucherURI TEXT, voucherURI_source TEXT, updated INTEGER)"))
+  invisible(NULL)
+}
+
+# Sources set by the user; automatic lookups never overwrite these
+NMNH_USER_SOURCES <- c("entered", "upload")
+
+.nmnh_field_col <- function(field) if (field == "voucher") "specimen_voucher" else "voucherURI"
+
+# Store a user value for one sample; NA clears it back to automatic
+nmnh_set_user <- function(con, id, field, value, source) {
+  .nmnh_ensure_table(con)
+  col <- .nmnh_field_col(field)
+  DBI::dbExecute(con, "INSERT OR IGNORE INTO nmnh_vouchers (ID) VALUES (?)", params = list(id))
+  DBI::dbExecute(con, sprintf("UPDATE nmnh_vouchers SET %s = ?, %s_source = ?, updated = ? WHERE ID = ?",
+                              col, col),
+                 params = list(value, if (is.na(value)) NA_character_ else source,
+                               as.integer(Sys.time()), id))
+  invisible(NULL)
+}
+
+# Check and store one value typed or uploaded by the user. Blank clears it back
+# to automatic. Returns NULL when stored, else the reason it was refused.
+nmnh_edit_value <- function(con, id, field, value, source = "entered") {
+  value <- trimws(value %|NA|% "")
+  if (!nzchar(value)) {
+    nmnh_set_user(con, id, field, NA_character_, NA_character_)
+    return(NULL)
+  }
+  n <- if (field == "voucher") nmnh_normalize_voucher(value) else nmnh_normalize_uri(value)
+  if (is.na(n$value)) return(n$note)
+  nmnh_set_user(con, id, field, n$value, source)
+  NULL
+}
+
+# The voucher report as a CSV for bulk editing (fixed column names)
+nmnh_download_df <- function(con, r) {
+  s <- DBI::dbGetQuery(con, "SELECT ID, Taxon FROM samples")
+  data.frame(ID = r$ID, Taxon = s$Taxon[match(r$ID, s$ID)],
+             specimen_voucher = r$nmnh_specimen_voucher, voucherURI = r$nmnh_voucherURI)
+}
+
+# Read an edited voucher CSV into nmnh_vouchers. Blank cells leave a value as
+# it is. Returns the IDs updated and one line per refused value.
+nmnh_upload_csv <- function(con, file) {
+  up <- utils::read.csv(file, check.names = FALSE, colClasses = "character")
+  if (!"ID" %in% names(up)) stop("The CSV needs an ID column.", call. = FALSE)
+  fields <- c(voucher = "specimen_voucher", uri = "voucherURI")
+  fields <- fields[fields %in% names(up)]
+  if (!length(fields)) {
+    stop("The CSV needs a specimen_voucher or voucherURI column.", call. = FALSE)
+  }
+  known <- DBI::dbGetQuery(con, "SELECT ID FROM samples")$ID
+  ids <- bad <- character()
+  for (i in seq_len(nrow(up))) {
+    id <- up$ID[i]
+    if (!id %in% known) {
+      bad <- c(bad, paste0(id, ": not a sample in this project"))
+      next
+    }
+    for (f in names(fields)) {
+      v <- trimws(up[[fields[[f]]]][i] %|NA|% "")
+      if (!nzchar(v)) next
+      note <- nmnh_edit_value(con, id, f, v, "upload")
+      if (is.null(note)) ids <- c(ids, id) else bad <- c(bad, paste0(id, ": ", note))
+    }
+  }
+  list(ids = unique(ids), bad = bad)
+}
+
+# Plain-language name for a stored source code
+nmnh_source_label <- function(src) {
+  out <- src
+  m <- !is.na(src) & startsWith(src, "mapfile:")
+  out[m] <- sprintf("mapping file column \"%s\"", substring(src[m], 9))
+  out[src %in% "entered"] <- "typed in the report"
+  out[src %in% "upload"] <- "uploaded CSV"
+  out
+}
+
+nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE, save = TRUE) {
   .meta_ensure_tables(con)
+  .nmnh_ensure_table(con)
+  stored <- DBI::dbReadTable(con, "nmnh_vouchers")
   s <- DBI::dbReadTable(con, "samples")
   recs <- DBI::dbGetQuery(con, "SELECT ID, source, level, depth, field, value FROM meta_records")
   rows <- lapply(ids, function(id) {
@@ -143,10 +231,17 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE) {
     src <- function(x) r[r$source == x, , drop = FALSE]
     col <- function(cc) if (is.na(cc) || !cc %in% names(row)) NA_character_ else .meta_chr(row[[cc]])[1]
     gb <- src("GBIF")
-    vc <- c(mapfile = col(cols$voucher), GBIF = GBIF_COMBOS$specimen_voucher$fn(gb),
+    st <- stored[stored$ID == id, , drop = FALSE]
+    user <- function(col) {
+      if (nrow(st) && isTRUE(st[[paste0(col, "_source")]] %in% NMNH_USER_SOURCES)) {
+        stats::setNames(st[[col]], st[[paste0(col, "_source")]])
+      }
+    }
+    mf <- function(cc) stats::setNames(col(cc), if (is.na(cc)) "mapfile" else paste0("mapfile:", cc))
+    vc <- c(user("specimen_voucher"), mf(cols$voucher), GBIF = GBIF_COMBOS$specimen_voucher$fn(gb),
             NCBI = NCBI_COMBOS$specimen_voucher$fn(src("NCBI")),
             GEOME = GEOME_COMBOS$specimen_voucher$fn(src("GEOME")))
-    uc <- c(mapfile = col(cols$uri), GBIF = .gbif_occ(gb, "occurrenceID"),
+    uc <- c(user("voucherURI"), mf(cols$uri), GBIF = .gbif_occ(gb, "occurrenceID"),
             NCBI = .nmnh_any_ark(src("NCBI")), GEOME = .nmnh_any_ark(src("GEOME")))
     first <- function(cand, norm) {
       notes <- character()
@@ -170,7 +265,7 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE) {
       occ <- if (!is.null(f$ref)) tryCatch(.gbif_get(paste0("occurrence/", f$ref))$occurrenceID,
                                            error = function(e) NULL)
       n <- nmnh_normalize_uri(occ %||% NA_character_)
-      if (!is.na(n$value)) u[c("value", "source")] <- list(n$value, "derived from voucher")
+      if (!is.na(n$value)) u[c("value", "source")] <- list(n$value, "GBIF via catalog number")
     }
     if (online && !is.na(u$value)) {
       chk <- nmnh_gbif_check(u$value, con)
@@ -191,7 +286,7 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE) {
         }
         if (!length(u_bad) && !is.na(chk$voucher)) {
           if (is.na(v$value)) {
-            v[c("value", "source")] <- list(chk$voucher, "derived from URI")
+            v[c("value", "source")] <- list(chk$voucher, "GBIF via specimen link")
           } else if (!identical(toupper(chk$voucher), toupper(v$value))) {
             v_bad <- paste0("does not match the GBIF record of the URI (", chk$voucher, ")")
           }
@@ -208,5 +303,25 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE) {
                fixed = v$fixed || u$fixed || length(c(v$notes, u$notes)) > 0,
                checked = checked)
   })
-  dplyr::as_tibble(do.call(rbind, rows))
+  res <- dplyr::as_tibble(do.call(rbind, rows))
+  if (save) .nmnh_save(con, res, stored)
+  res
+}
+
+# Store resolved values, leaving user-set fields alone
+.nmnh_save <- function(con, res, stored) {
+  now <- as.integer(Sys.time())
+  DBI::dbWithTransaction(con, for (i in seq_len(nrow(res))) {
+    id <- res$ID[i]
+    DBI::dbExecute(con, "INSERT OR IGNORE INTO nmnh_vouchers (ID) VALUES (?)", params = list(id))
+    st <- stored[stored$ID == id, , drop = FALSE]
+    for (f in list(c("specimen_voucher", "nmnh_specimen_voucher", "voucher_source"),
+                   c("voucherURI", "nmnh_voucherURI", "uri_source"))) {
+      if (nrow(st) && isTRUE(st[[paste0(f[1], "_source")]] %in% NMNH_USER_SOURCES)) next
+      DBI::dbExecute(con, sprintf("UPDATE nmnh_vouchers SET %s = ?, %s_source = ?, updated = ? WHERE ID = ?",
+                                  f[1], f[1]),
+                     params = list(res[[f[2]]][i], res[[f[3]]][i], now, id))
+    }
+  })
+  invisible(NULL)
 }
