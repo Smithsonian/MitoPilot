@@ -716,7 +716,7 @@ export_server <- function(id) {
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
           textAreaInput(ns(id), label, value, width = "100%")
-        )$find("textarea")$addClass("mp-hl")$addAttrs(spellcheck = "false", autocomplete = "off", 
+        )$find("textarea")$addClass("mp-hl")$addAttrs(spellcheck = "false", autocomplete = "off",
           `aria-describedby` = ns(paste0(id, "_status"))
         )$before(uiOutput(ns(paste0(id, "_status"))))$after(
           tags$details(class = "mp-hdr-preview", open = NA,
@@ -773,7 +773,8 @@ export_server <- function(id) {
         ),
         # What pressing Export will do, in the group currently chosen.
         uiOutput(ns("export_summary")),
-        div(class = "mp-nmnh-toggle",
+        div(class = "mp-card mp-card-nmnh",
+        div(class = "mp-nmnh-toggle mp-card-title",
           mp_checkbox(ns("nmnh_user"), tagList(tags$img(src = "www/si_sun.svg", alt = "", class = "nmnh-logo"), "NMNH user"),
                     value = nmnh_template_on(opts$fasta_header)),
           mp_help_tip(tagList(
@@ -788,7 +789,7 @@ export_server <- function(id) {
           condition = "input.nmnh_user == true",
           ns = ns,
           div(
-            class = "mp-nmnh-card",
+            class = "mp-card-body",
             uiOutput(ns("nmnh_sources")),
             tags$details(
               class = "mp-nmnh-cols",
@@ -813,25 +814,28 @@ export_server <- function(id) {
             ),
             uiOutput(ns("nmnh_status"))
           )
-        ),
-        hdr_box("fasta_header", "Mitogenome FASTA header:", opts$fasta_header),
-        mp_checkbox(
-          ns("export_genes"),
-          "Export individual protein-coding and rRNA genes",
-          value = snap$export_genes %||% FALSE
-        ),
-        opts_help(
-          "Writes one FASTA and one feature table per gene, into a genes ",
-          "folder beside the group files."
-        ),
-        # The gene header only matters when the genes are being written.
-        conditionalPanel(
-          condition = "input.export_genes == true",
-          ns = ns,
-          hdr_box("fasta_header_gene", "Gene FASTA header:",
-                  opts$fasta_header_gene),
-          opts_help("The gene name is added to this header automatically.",
-                    nested = TRUE)
+        )),
+        div(class = "mp-card mp-card-plain",
+            hdr_box("fasta_header", "Mitogenome FASTA header", opts$fasta_header)),
+        div(class = "mp-card mp-card-plain",
+          div(class = "mp-card-title", mp_checkbox(
+            ns("export_genes"),
+            "Export individual protein-coding and rRNA genes",
+            value = snap$export_genes %||% FALSE
+          )),
+          opts_help(
+            "Writes one FASTA and one feature table per gene, into a genes ",
+            "folder beside the group files."
+          ),
+          # The gene header only matters when the genes are being written.
+          conditionalPanel(
+            condition = "input.export_genes == true",
+            ns = ns,
+            hdr_box("fasta_header_gene",
+                    tagList("Gene FASTA header ",
+                            span(class = "mp-card-note", "(the gene name is added automatically)")),
+                    opts$fasta_header_gene)
+          )
         ),
         mp_checkbox(
           ns("include_alignments"),
@@ -843,13 +847,12 @@ export_server <- function(id) {
           "protein-coding gene in the group. Needs more than one record."
         ),
         # PCG outlier review options, separated from the export options above
-        tags$hr(style = "border-top: 1px solid var(--mp-border); margin: 1em 0 0.75em;"),
-        h4("PCG annotation outlier review", style = "margin-top: 0;"),
-        mp_checkbox(
+        div(class = "mp-card mp-card-plain",
+        div(class = "mp-card-title", mp_checkbox(
           ns("review_outliers"),
           "Review PCG annotations for outliers",
           value = snap$review_outliers %||% rv$opt_review
-        ),
+        )),
         conditionalPanel(
           condition = "input.review_outliers == true",
           ns = ns,
@@ -889,7 +892,7 @@ export_server <- function(id) {
               )
             )
           )
-        )),
+        ))),
         div(class = "mp-export-side", cols_help)),
         footer = mp_footer(
           primary = actionButton(ns("export_data"), "Export"),
@@ -962,12 +965,8 @@ export_server <- function(id) {
         files <- c(files, paste0("AA_alignments_", group, ".html"))
       }
       div(
-        style = paste(
-          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin: 4px 0 14px;",
-          "background: var(--mp-surface-alt);",
-          "border-left: 3px solid var(--mp-primary);"
-        ),
-        div(sprintf("%s in group \"%s\".", mp_n(n, "record"), group)),
+        class = "mp-card mp-card-summary",
+        div(class = "mp-card-title", sprintf("%s in group \"%s\"", mp_n(n, "record"), group)),
         div("Written to ", tags$code(class = "mp-path", path), " as: ",
             paste(files, collapse = ", ")),
         if (dir.exists(path)) {
@@ -1177,7 +1176,7 @@ export_server <- function(id) {
       div(class = "mp-nmnh-status mp-fg-warning",
           icon("triangle-exclamation"),
           sprintf(" %d of %s %s attention. ", bad, mp_n(nrow(r), "sample"), if (bad == 1) "needs" else "need"),
-          actionButton(ns("nmnh_report"), "Review and fix", class = "btn-xs"),
+          actionButton(ns("nmnh_report"), "Review and fix", class = "btn-sm"),
           skipped)
     })
     output$nmnh_sources <- renderUI({
