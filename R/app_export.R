@@ -677,7 +677,8 @@ export_server <- function(id) {
       )
       grouped <- rv$data[!is.na(rv$data$export_group), , drop = FALSE]
       nmnh_cols <- nmnh_columns(con)
-      nmnh_choices <- c("(none)" = "", setdiff(sample_cols, c("ID", "Taxon", "R1", "R2")))
+      nmnh_choices <- c("(none: look up from GBIF, NCBI, or GEOME)" = "",
+                        setdiff(sample_cols, c("ID", "Taxon", "R1", "R2")))
       cols_help <- tags$details(
         class = "mp-meta-panel",
         meta_panel_summary(token_groups),
@@ -711,9 +712,12 @@ export_server <- function(id) {
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
           textAreaInput(ns(id), tagList(label, insert_field_link(ns(id))), value, width = "100%")
-        )$find("textarea")$addAttrs(
+        )$find("textarea")$addClass("mp-hl")$addAttrs(
           `aria-describedby` = ns(paste0(id, "_status"))
-        )$before(uiOutput(ns(paste0(id, "_status"))))$allTags()
+        )$before(uiOutput(ns(paste0(id, "_status"))))$after(
+          tags$details(class = "mp-hdr-preview", open = NA,
+                       tags$summary("Preview"), uiOutput(ns(paste0(id, "_preview"))))
+        )$allTags()
       }
       modalDialog(
         title = mp_modal_title(
@@ -767,26 +771,33 @@ export_server <- function(id) {
                     value = nmnh_template_on(opts$fasta_header)),
         opts_help(
           "Adds the ", tags$code("[specimen_voucher=]"), " and ",
-          tags$code("[voucherURI=]"), " modifiers NMNH requires, filled per ",
-          "sample from your mapping file, GBIF, NCBI, or GEOME, and checked ",
-          "against GBIF."
+          tags$code("[voucherURI=]"), " modifiers required by the NMNH Minimum ",
+          "Genomics Metadata Requirements, so each GenBank record links back to ",
+          "its museum specimen. Values come from your mapping file, GBIF, NCBI, ",
+          "or GEOME, and are checked against GBIF."
         ),
         conditionalPanel(
           condition = "input.nmnh_user == true",
           ns = ns,
           div(
-            style = "display: flex; flex-flow: row nowrap; gap: 1em; align-items: flex-end;",
-            div(style = "flex: 1; min-width: 0;",
-                selectInput(ns("nmnh_voucher_col"), "Voucher column:", nmnh_choices,
-                            selected = nmnh_cols$voucher %|NA|% "", width = "100%")),
-            div(style = "flex: 1; min-width: 0;",
-                selectInput(ns("nmnh_uri_col"), "Voucher URI column:", nmnh_choices,
-                            selected = nmnh_cols$uri %|NA|% "", width = "100%")),
-            div(class = "mp-opts-checkbox",
-                actionButton(ns("nmnh_recheck"), "Re-check",
-                             title = "Ask GBIF again about this group's voucher URIs"))
-          ),
-          uiOutput(ns("nmnh_status"))
+            class = "mp-nmnh-card",
+            uiOutput(ns("nmnh_sources")),
+            tags$details(
+              class = "mp-nmnh-cols",
+              open = if (is.na(nmnh_cols$voucher) && is.na(nmnh_cols$uri)) NA,
+              tags$summary("Change which mapping file columns are used"),
+              div(
+                style = "display: flex; flex-flow: row nowrap; gap: 1em;",
+                div(style = "flex: 1; min-width: 0;",
+                    selectInput(ns("nmnh_voucher_col"), "Catalog number column (e.g. USNM:FISH:12345)",
+                                nmnh_choices, selected = nmnh_cols$voucher %|NA|% "", width = "100%")),
+                div(style = "flex: 1; min-width: 0;",
+                    selectInput(ns("nmnh_uri_col"), "Specimen link column (ARK, e.g. http://n2t.net/ark:/65665/3...)",
+                                nmnh_choices, selected = nmnh_cols$uri %|NA|% "", width = "100%"))
+              )
+            ),
+            uiOutput(ns("nmnh_status"))
+          )
         ),
         hdr_box("fasta_header", "Mitogenome FASTA header:", opts$fasta_header),
         mp_checkbox(
@@ -912,6 +923,8 @@ export_server <- function(id) {
     output$fasta_header_gene_status <- renderUI({
       render_hdr_status(validate_fasta_header(hdr_gene(), group_data()))
     })
+    output$fasta_header_preview <- renderUI(hdr_preview_ui(hdr_main(), group_data()))
+    output$fasta_header_gene_preview <- renderUI(hdr_preview_ui(hdr_gene(), group_data()))
 
     # Gears turn only while an export is actually running (T22).
     output$export_gears <- renderUI({
@@ -1139,16 +1152,25 @@ export_server <- function(id) {
       skipped <- if (any(!is.na(r$nmnh_voucherURI) & !r$checked)) {
         " GBIF could not be reached, so the specimen check was skipped."
       }
-      link <- if (bad > 0 || any(r$fixed)) actionLink(ns("nmnh_report"), "View report")
       if (bad == 0) {
-        return(span(class = "mp-fg-success", style = "font-size: var(--mp-fs-meta);",
-                    icon("circle-check"), sprintf(" All %s ready. ", mp_n(nrow(r), "sample")),
-                    link, skipped))
+        return(div(class = "mp-nmnh-status mp-fg-success",
+                   icon("circle-check"), sprintf(" All %s ready. ", mp_n(nrow(r), "sample")),
+                   if (any(r$fixed)) actionLink(ns("nmnh_report"), "See what was auto-fixed"), skipped))
       }
-      span(class = "mp-fg-warning", style = "font-size: var(--mp-fs-meta);",
-           icon("triangle-exclamation"),
-           sprintf(" %d of %s have NMNH problems. ", bad, mp_n(nrow(r), "sample")),
-           link, skipped)
+      div(class = "mp-nmnh-status mp-fg-warning",
+          icon("triangle-exclamation"),
+          sprintf(" %d of %s %s attention. ", bad, mp_n(nrow(r), "sample"), if (bad == 1) "needs" else "need"),
+          actionButton(ns("nmnh_report"), "Review and fix", class = "btn-xs"),
+          skipped)
+    })
+    output$nmnh_sources <- renderUI({
+      req(nmnh_on())
+      r <- nmnh_res()
+      if (is.null(r)) return(NULL)
+      cols <- nmnh_columns(session$userData$con)
+      div(class = "mp-nmnh-sources",
+          div(tags$b("Catalog number: "), nmnh_source_text(r$voucher_source, cols$voucher)),
+          div(tags$b("Specimen link: "), nmnh_source_text(r$uri_source, cols$uri)))
     })
 
     nmnh_note <- function(src, note) {
@@ -1187,6 +1209,8 @@ export_server <- function(id) {
         div(
           style = "display: flex; flex-flow: row wrap; gap: 8px; align-items: flex-start; margin-top: 12px;",
           uiOutput(ns("nmnh_copy")),
+          actionButton(ns("nmnh_recheck"), "Re-check with GBIF", class = "btn-sm",
+                       title = "Ask GBIF again about this group's specimen links"),
           downloadButton(ns("nmnh_csv"), "Download CSV for bulk edit", class = "btn-sm btn-default"),
           fileInput(ns("nmnh_upload"), NULL, accept = ".csv", buttonLabel = "Upload edited CSV",
                     placeholder = "CSV file")
