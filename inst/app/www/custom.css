@@ -1059,6 +1059,8 @@ details.mp-meta-panel > summary { border-bottom: none; margin: 0; padding: 0; }
 .mp-src-ncbi     { --mp-src-bg: #ada7cf; --mp-src-fg: #332288; }
 .mp-src-geome    { --mp-src-bg: #bbe1f6; --mp-src-fg: #56B4E9; }
 .mp-src-other    { --mp-src-bg: transparent; --mp-src-fg: #999999; }
+/* matches the <code> colour used for {completeness} in the help text */
+.mp-src-completeness { --mp-src-bg: #f9f2f4; --mp-src-fg: #c7254e; }
 .mp-src-dot {
   display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%;
   margin-right: 0.4em; background: var(--mp-src-fg);

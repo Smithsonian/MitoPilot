@@ -265,7 +265,7 @@ function mpTokMap(modal) {
   return m;
 }
 function mpTokSrc(map, t) {
-  var src = /^\{nmnh_/.test(t) ? 'nmnh' : (map[t] ? map[t].src : 'other');
+  var src = /^\{nmnh_/.test(t) ? 'nmnh' : t === '{completeness}' ? 'completeness' : (map[t] ? map[t].src : 'other');
   return 'mp-src-' + src + (map[t] && map[t].miss ? ' mp-hl-miss' : '');
 }
 function mpHlRender(box) {
