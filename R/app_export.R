@@ -767,14 +767,16 @@ export_server <- function(id) {
         ),
         # What pressing Export will do, in the group currently chosen.
         uiOutput(ns("export_summary")),
-        mp_checkbox(ns("nmnh_user"), tagList(tags$img(src = "www/si_sun.svg", alt = "", class = "nmnh-logo"), "NMNH user"),
+        div(class = "mp-nmnh-toggle",
+          mp_checkbox(ns("nmnh_user"), tagList(tags$img(src = "www/si_sun.svg", alt = "", class = "nmnh-logo"), "NMNH user"),
                     value = nmnh_template_on(opts$fasta_header)),
-        opts_help(
-          "Adds the ", tags$code("[specimen_voucher=]"), " and ",
-          tags$code("[voucherURI=]"), " modifiers required by the NMNH Minimum ",
-          "Genomics Metadata Requirements, so each GenBank record links back to ",
-          "its museum specimen. Values come from your mapping file, GBIF, NCBI, ",
-          "or GEOME, and are checked against GBIF."
+          mp_help_tip(tagList(
+            "Adds the ", tags$code("[specimen_voucher=]"), " and ",
+            tags$code("[voucherURI=]"), " modifiers required by the NMNH Minimum ",
+            "Genomics Metadata Requirements, so each GenBank record links back to ",
+            "its museum specimen. Values come from your mapping file, GBIF, NCBI, ",
+            "or GEOME, and are checked against GBIF."
+          ), label = "NMNH user")
         ),
         conditionalPanel(
           condition = "input.nmnh_user == true",
@@ -1086,6 +1088,14 @@ export_server <- function(id) {
                             value = nmnh_template_add(input$fasta_header_gene))
       }
     }
+    # Gene export switched on after NMNH: give the gene header the NMNH fields too
+    observeEvent(input$export_genes, ignoreInit = TRUE, {
+      if (isTRUE(input$export_genes) && isTRUE(input$nmnh_user) &&
+          !nmnh_template_on(input$fasta_header_gene %||% "")) {
+        updateTextAreaInput(session, "fasta_header_gene",
+                            value = nmnh_template_add(input$fasta_header_gene %||% ""))
+      }
+    })
     observeEvent(input$nmnh_user, ignoreInit = TRUE, {
       on <- isTRUE(input$nmnh_user)
       if (on == nmnh_template_on(input$fasta_header)) return()

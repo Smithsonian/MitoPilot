@@ -1050,7 +1050,9 @@ details.mp-meta-panel > summary { border-bottom: none; }
 /* Field colours by source, shared by header pills, preview, and the
    Available metadata group dots. Colour-blind safe (Tol/Okabe-Ito); orange is
    kept for "missing" only. */
-.mp-src-basic, .mp-src-pipeline, .mp-src-nmnh { --mp-src-bg: #ffffff; --mp-src-fg: #777777; }
+.mp-src-basic, .mp-src-pipeline { --mp-src-bg: #ffffff; --mp-src-fg: #777777; }
+/* NMNH: Smithsonian sunburst yellow with its blue */
+.mp-src-nmnh     { --mp-src-bg: #ffe580; --mp-src-fg: #009ade; }
 .mp-src-mapfile  { --mp-src-bg: #a0c9ad; --mp-src-fg: #117733; }
 .mp-src-gbif     { --mp-src-bg: #cfa7bb; --mp-src-fg: #882255; }
 .mp-src-ncbi     { --mp-src-bg: #ada7cf; --mp-src-fg: #332288; }
@@ -1125,4 +1127,20 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
     box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.08);
   }
   .mp-export-side details.mp-meta-panel[open] { max-height: 40vh; overflow-y: auto; }
+}
+
+/* NMNH user: the sunburst is the checkbox, grey when off, colour when on */
+.mp-nmnh-toggle { display: flex; align-items: baseline; gap: 2px; margin-bottom: 8px; }
+.mp-nmnh-toggle .pretty { margin: 0; }
+.mp-nmnh-toggle .pretty .state label { text-indent: 0; padding-left: 0; }
+.mp-nmnh-toggle .pretty .state label::before,
+.mp-nmnh-toggle .pretty .state label::after,
+.mp-nmnh-toggle .pretty .state .icon { display: none !important; }
+.mp-nmnh-toggle .nmnh-logo {
+  height: 1.6em; margin: -0.3em 0.4em -0.3em 0;
+  filter: grayscale(1); opacity: 0.45; transition: filter 0.15s, opacity 0.15s;
+}
+.mp-nmnh-toggle .pretty input:checked ~ .state .nmnh-logo { filter: none; opacity: 1; }
+.mp-nmnh-toggle .pretty input:focus-visible ~ .state .nmnh-logo {
+  outline: 2px solid var(--mp-primary); outline-offset: 2px; border-radius: 50%;
 }
