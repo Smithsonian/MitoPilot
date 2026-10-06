@@ -307,6 +307,10 @@ function mpHlInit(modal) {
   var open = true;
   try { open = localStorage.getItem('mpHdrPreview') !== '0'; } catch (e) {}
   modal.find('details.mp-hdr-preview').prop('open', open);
+  // narrow windows: the metadata drawer starts folded
+  if (window.matchMedia('(max-width: 819px)').matches) {
+    modal.find('.mp-export-side details.mp-meta-panel').prop('open', false);
+  }
 }
 $(document).on('shown.bs.modal', function(e) { mpHlInit($(e.target)); });
 $(document).on('input change focus mouseup', 'textarea.mp-hl', function() { mpHlRender(this); });

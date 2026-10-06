@@ -722,7 +722,7 @@ export_server <- function(id) {
           tagList("Export data", uiOutput(ns("export_gears"), inline = TRUE))
         ),
         size = "xl",
-        class = "mp-modal-form",
+        class = "mp-modal-form mp-export-body",
         # Options and headers on the left, Available metadata pinned on the right
         div(class = "mp-export-split", div(class = "mp-export-main",
         # Export group + header-template selector + Save, one row.

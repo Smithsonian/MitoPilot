@@ -1105,15 +1105,24 @@ details.mp-nmnh-cols > summary {
 details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 .mp-nmnh-status { font-size: var(--mp-fs-meta); margin-top: 4px; }
 
-/* Export window: options and headers left, Available metadata pinned right */
+/* Export window: options and headers left, Available metadata right, each
+   column with its own scroll bar. Narrow windows stack them and pin the
+   metadata panel to the bottom as a drawer. */
+.mp-modal-form.mp-export-body { max-height: none; overflow: visible; }
 .mp-export-split { display: flex; flex-flow: row nowrap; gap: 1.5em; align-items: flex-start; }
-.mp-export-main { flex: 3 1 0; min-width: 0; }
-.mp-export-side {
-  flex: 2 1 0; min-width: 0; position: sticky; top: 0;
-  max-height: calc(70vh - 32px); overflow-y: auto;
-}
+.mp-export-main, .mp-export-side { max-height: 70vh; overflow-y: auto; }
+.mp-export-main { flex: 3 1 0; min-width: 0; padding-right: 8px; }
+.mp-export-side { flex: 2 1 0; min-width: 280px; }
 .mp-export-side details.mp-meta-panel { margin-bottom: 0; }
-@media (max-width: 991px) {
-  .mp-export-split { flex-flow: column nowrap; }
-  .mp-export-side { position: static; max-height: none; }
+@media (max-width: 819px) {
+  .mp-modal-form.mp-export-body { max-height: 70vh; overflow-y: auto; }
+  .mp-export-split { flex-flow: column nowrap; align-items: stretch; }
+  .mp-export-main, .mp-export-side { flex: none; min-width: 0; max-height: none; overflow: visible; }
+  .mp-export-main { padding-right: 0; }
+  .mp-export-side {
+    position: sticky; bottom: -15px; z-index: 2; margin: 0 -15px -15px;
+    padding: 0 15px 15px; background: var(--mp-surface);
+    box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.08);
+  }
+  .mp-export-side details.mp-meta-panel[open] { max-height: 40vh; overflow-y: auto; }
 }
