@@ -979,7 +979,7 @@ a.mp-link:focus-visible {
 .mp-meta-citation { margin: 4px 0 6px; font-size: var(--mp-fs-meta); }
 
 /* Export Data token chips */
-/* The column types sit in one bordered box inside Available columns, each type
+/* The column types sit in one bordered box inside Available metadata, each type
    indented with its chips indented again beneath it. */
 .mp-token-list {
   margin: 8px 0; padding: 8px 14px 6px; border: 1px solid var(--mp-border);
@@ -1029,3 +1029,19 @@ a.mp-link:focus-visible {
 .mp-mv-link { font-weight: normal; margin: 0; }
 .mp-mv-toggle.active { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2); font-weight: 600; }
 .mp-mv-count { margin-right: auto; }
+
+.nmnh-logo {
+  height: 1.2em;
+  vertical-align: -0.25em;
+  margin-right: 0.3em;
+}
+
+/* Available metadata panel: tinted so it reads as a resource, not a header */
+details.mp-meta-panel {
+  border: 1px solid var(--mp-border); border-left: 3px solid var(--mp-primary);
+  border-radius: var(--mp-radius); background: var(--mp-primary-soft); padding: 0 12px 4px;
+}
+details.mp-meta-panel > summary { border-bottom: none; }
+.mp-meta-count, .mp-insert-field { font-weight: 400; font-size: var(--mp-fs-meta); }
+.mp-meta-count { color: var(--mp-text-muted); }
+.mp-insert-field { margin-left: 0.5em; }

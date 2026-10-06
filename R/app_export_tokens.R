@@ -83,6 +83,20 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
   )
 }
 
+#' Summary line for the Available metadata panel, with the field count
+#' @noRd
+meta_panel_summary <- function(groups) {
+  n <- sum(vapply(groups, function(x) nrow(x$tokens), integer(1)))
+  tags$summary(icon("database"), " Available metadata",
+               if (n) span(class = "mp-meta-count", sprintf(" (%d fields)", n)))
+}
+
+#' Link beside a header box label that opens the Available metadata panel
+#' @noRd
+insert_field_link <- function(box_id) {
+  tags$a(href = "#", class = "mp-insert-field", `data-box` = box_id, "Insert field")
+}
+
 #' Clickable token chips for the Export Data modal
 #'
 #' @param groups `export_token_groups()` output

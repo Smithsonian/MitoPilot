@@ -679,7 +679,8 @@ export_server <- function(id) {
       nmnh_cols <- nmnh_columns(con)
       nmnh_choices <- c("(none)" = "", setdiff(sample_cols, c("ID", "Taxon", "R1", "R2")))
       cols_help <- tags$details(
-        tags$summary("Available columns"),
+        class = "mp-meta-panel",
+        meta_panel_summary(token_groups),
         opts_help(
           "Click a column to insert it at the cursor of the header box you last clicked. ",
           "Write a column name in braces to use its value, for example ",
@@ -709,7 +710,7 @@ export_server <- function(id) {
       # is bound to it (WCAG 3.3.1).
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
-          textAreaInput(ns(id), label, value, width = "100%")
+          textAreaInput(ns(id), tagList(label, insert_field_link(ns(id))), value, width = "100%")
         )$find("textarea")$addAttrs(
           `aria-describedby` = ns(paste0(id, "_status"))
         )$before(uiOutput(ns(paste0(id, "_status"))))$allTags()
@@ -762,7 +763,7 @@ export_server <- function(id) {
         ),
         # What pressing Export will do, in the group currently chosen.
         uiOutput(ns("export_summary")),
-        mp_checkbox(ns("nmnh_user"), "NMNH user",
+        mp_checkbox(ns("nmnh_user"), tagList(tags$img(src = "www/si_sun.svg", alt = "", class = "nmnh-logo"), "NMNH user"),
                     value = nmnh_template_on(opts$fasta_header)),
         opts_help(
           "Adds the ", tags$code("[specimen_voucher=]"), " and ",
