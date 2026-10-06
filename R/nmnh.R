@@ -24,6 +24,28 @@ nmnh_template_add <- function(template) {
 
 nmnh_template_remove <- function(template) sub(nmnh_tokens(), "", template, fixed = TRUE)
 
+# Project setting: the NMNH user switch, remembered between Export Data openings
+nmnh_user_pref <- function(con) {
+  .meta_ensure_tables(con)
+  isTRUE(DBI::dbGetQuery(con, "SELECT value FROM meta_options WHERE key = 'nmnh_user'")$value[1] == "1")
+}
+
+nmnh_set_user_pref <- function(con, on) {
+  .meta_ensure_tables(con)
+  DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_options VALUES ('nmnh_user', ?)",
+                 params = list(if (isTRUE(on)) "1" else "0"))
+  invisible(isTRUE(on))
+}
+
+# A header with the NMNH tokens added when the switch is remembered on, unless
+# it already carries voucher modifiers of its own
+nmnh_template_pref <- function(con, template) {
+  if (nmnh_user_pref(con) && !nmnh_template_on(template) && !length(nmnh_existing_mods(template))) {
+    return(nmnh_template_add(template))
+  }
+  template
+}
+
 # Glue a header template. A [modifier=] whose value comes out empty, NA, or
 # from a column the data lacks is left out, so no header carries a blank value.
 header_fill <- function(dat, template) {
@@ -183,8 +205,9 @@ nmnh_field_choices <- function(con) {
   .meta_ensure_tables(con)
   cols <- c("Taxon", export_metadata_cols(DBI::dbListFields(con, "samples"), character()))
   keys <- DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key
-  c(stats::setNames(paste0("map:", cols), paste("Mapping file:", cols)),
-    stats::setNames(keys, .nmnh_key_label(keys)))
+  srt <- function(x) x[order(tolower(names(x)))]
+  c(srt(stats::setNames(paste0("map:", cols), paste("Mapping file:", cols))),
+    srt(stats::setNames(keys, .nmnh_key_label(keys))))
 }
 
 .nmnh_key_label <- function(key) {
@@ -193,11 +216,13 @@ nmnh_field_choices <- function(con) {
   out <- paste0(toupper(sub(":.*", "", key)), ": ",
                 gsub(":", " ", sub("^[^:]+:(raw|combo):", "", key)))
   out[map] <- paste("Mapping file:", substring(key[map], 5))
+  out[key == "none"] <- "None"
   out
 }
 
 # One sample's value for a field key: row is its samples row, recs its meta_records
 .nmnh_key_value <- function(row, recs, key) {
+  if (key == "none") return(NA_character_)
   if (startsWith(key, "map:")) {
     col <- substring(key, 5)
     return(if (col %in% names(row)) .meta_chr(row[[col]])[1] else NA_character_)

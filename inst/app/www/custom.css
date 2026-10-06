@@ -1043,9 +1043,8 @@ details.mp-meta-panel {
   border-radius: var(--mp-radius); background: var(--mp-primary-soft); padding: 0 12px 4px;
 }
 details.mp-meta-panel > summary { border-bottom: none; }
-.mp-meta-count, .mp-insert-field { font-weight: 400; font-size: var(--mp-fs-meta); }
+.mp-meta-count { font-weight: 400; font-size: var(--mp-fs-meta); }
 .mp-meta-count { color: var(--mp-text-muted); }
-.mp-insert-field { margin-left: 0.5em; }
 
 /* Field colours by source, shared by header pills, preview, and the
    Available metadata group dots. Colour-blind safe (Tol/Okabe-Ito); orange is

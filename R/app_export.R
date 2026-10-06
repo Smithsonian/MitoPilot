@@ -668,6 +668,8 @@ export_server <- function(id) {
         sel_tmpl <- snap$template_select %||% sel_tmpl
         opts$fasta_header <- snap$fasta_header %||% opts$fasta_header
         opts$fasta_header_gene <- snap$fasta_header_gene %||% opts$fasta_header_gene
+      } else {
+        opts$fasta_header <- nmnh_template_pref(con, opts$fasta_header)
       }
       # Usable tokens as grouped chips; bookkeeping fields are never offered (T23).
       sample_cols <- tryCatch(
@@ -713,7 +715,7 @@ export_server <- function(id) {
       # is bound to it (WCAG 3.3.1).
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
-          textAreaInput(ns(id), tagList(label, insert_field_link(ns(id))), value, width = "100%")
+          textAreaInput(ns(id), label, value, width = "100%")
         )$find("textarea")$addClass("mp-hl")$addAttrs(spellcheck = "false", autocomplete = "off", 
           `aria-describedby` = ns(paste0(id, "_status"))
         )$before(uiOutput(ns(paste0(id, "_status"))))$after(
@@ -989,8 +991,10 @@ export_server <- function(id) {
       con <- session$userData$con
       if (name %in% list_export_templates(con)) {
         o <- get_export_opts(con, name)
-        updateTextAreaInput(session, "fasta_header", value = o$fasta_header)
-        updateTextAreaInput(session, "fasta_header_gene", value = o$fasta_header_gene)
+        updateTextAreaInput(session, "fasta_header", value = nmnh_template_pref(con, o$fasta_header))
+        updateTextAreaInput(session, "fasta_header_gene", value = if (isTRUE(input$export_genes)) {
+          nmnh_template_pref(con, o$fasta_header_gene)
+        } else o$fasta_header_gene)
       }
     }, ignoreInit = TRUE)
 
@@ -1100,6 +1104,7 @@ export_server <- function(id) {
     })
     observeEvent(input$nmnh_user, ignoreInit = TRUE, {
       on <- isTRUE(input$nmnh_user)
+      nmnh_set_user_pref(session$userData$con, on)
       if (on == nmnh_template_on(input$fasta_header)) return()
       if (!on) {
         main <- nmnh_template_remove(input$fasta_header)
@@ -1281,7 +1286,7 @@ export_server <- function(id) {
       }
       pick <- function(field, index) {
         cur <- r[[paste0(field, "_field")]][index] %|NA|% ""
-        opts <- c(Automatic = "", choices)
+        opts <- c(None = "none", Automatic = "", choices)
         if (nzchar(cur) && !cur %in% opts) opts <- c(opts, stats::setNames(cur, .nmnh_key_label(cur)))
         tags$select(
           class = "form-control input-sm mp-nmnh-pick", `aria-label` = paste(field, "field", r$ID[index]),

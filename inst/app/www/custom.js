@@ -249,19 +249,6 @@ $(document).on('input', '.mp-token-filter', function() {
   if (q) list.find('details').attr('open', '');
 });
 
-// "Insert field" beside a header box: aim the chips at that box, open the panel
-$(document).on('click', '.mp-insert-field', function(e) {
-  e.preventDefault();
-  var modal = $(this).closest('.modal');
-  var panel = modal.find('details.mp-meta-panel');
-  if (!panel.length) return;
-  modal.find('.mp-token-list').attr('data-target', this.getAttribute('data-box'));
-  panel.prop('open', true);
-  panel[0].scrollIntoView({behavior: 'smooth', block: 'start'});
-  var f = panel.find('.mp-token-filter')[0];
-  if (f) f.focus({preventScroll: true});
-});
-
 // Header boxes: a backdrop behind each transparent textarea draws a coloured
 // pill under every {field}, keyed by the Available metadata group it is in.
 function mpTokMap(modal) {
