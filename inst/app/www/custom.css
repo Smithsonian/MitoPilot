@@ -30,6 +30,7 @@
   --mp-surface-alt:    #f5f5f5;  /* table stripe, chips, code surface  */
   --mp-surface-dark:   #2d2d2d;  /* command/log surface                */
   --mp-on-dark:        #dcdcdc;
+  --mp-nmnh-accent:    #ffcd00;  /* Smithsonian yellow, decoration only */
 
   /* type */
   --mp-font-mono: Menlo, Monaco, Consolas, "Courier New", monospace;
@@ -982,8 +983,8 @@ a.mp-link:focus-visible {
 /* The column types sit in one bordered box inside Available metadata, each type
    indented with its chips indented again beneath it. */
 .mp-token-list {
-  margin: 8px 0; padding: 8px 14px 6px; border: 1px solid var(--mp-border);
-  border-radius: var(--mp-radius, 4px); background: var(--mp-surface-alt);
+  margin: var(--mp-space-2) 0; padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-border); border-radius: var(--mp-radius); background: var(--mp-surface);
 }
 .mp-token-filter { max-width: 260px; margin-bottom: 6px; }
 .mp-token-lead { margin: 4px 0 2px; font-size: var(--mp-fs-meta); color: var(--mp-text-muted); }
@@ -1040,9 +1041,10 @@ a.mp-link:focus-visible {
 /* Available metadata panel: tinted so it reads as a resource, not a header */
 details.mp-meta-panel {
   border: 1px solid var(--mp-border); border-left: 3px solid var(--mp-primary);
-  border-radius: var(--mp-radius); background: var(--mp-primary-soft); padding: 0 12px 4px;
+  border-radius: var(--mp-radius); background: var(--mp-primary-soft);
+  padding: var(--mp-space-2) var(--mp-space-3);
 }
-details.mp-meta-panel > summary { border-bottom: none; }
+details.mp-meta-panel > summary { border-bottom: none; margin: 0; padding: 0; }
 .mp-meta-count { font-weight: 400; font-size: var(--mp-fs-meta); }
 .mp-meta-count { color: var(--mp-text-muted); }
 
@@ -1092,11 +1094,31 @@ details.mp-hdr-preview > summary {
 .mp-hl-empty { font-style: italic; color: var(--mp-warning); }
 .mp-hl-bad { color: var(--mp-danger, #a94442); text-decoration: underline wavy; }
 
-/* NMNH section: where each value comes from, then the ready count */
-.mp-nmnh-card {
-  margin: 4px 0 12px 26px; padding: 8px 12px; border-left: 3px solid #ffcd00;
-  background: var(--mp-surface-alt); border-radius: var(--mp-radius);
+/* Export window cards: one box style; only the accent and fill differ */
+.mp-card {
+  border: 1px solid var(--mp-border);
+  border-left: 3px solid var(--mp-card-accent, var(--mp-border));
+  border-radius: var(--mp-radius);
+  background: var(--mp-card-bg, var(--mp-surface-alt));
+  padding: var(--mp-space-2) var(--mp-space-3);
+  margin: 0 0 var(--mp-space-3);
 }
+.mp-card > :last-child, .mp-card .shiny-input-container:last-child { margin-bottom: 0; }
+.mp-card-title, .mp-card .control-label {
+  font-size: var(--mp-fs-body); font-weight: 600; margin: 0 0 var(--mp-space-1);
+}
+.mp-card-title { display: flex; align-items: center; gap: var(--mp-space-1); }
+.mp-card-title .shiny-input-container { width: auto !important; margin-bottom: 0; }
+.mp-card-title .pretty { margin: 0; }
+.mp-card-title .pretty .state label { font-weight: 600; }
+.mp-card-body { font-size: var(--mp-fs-meta); margin-top: var(--mp-space-1); }
+.mp-card-body .help-block { margin-bottom: var(--mp-space-1); }
+.mp-card-note { font-weight: 400; font-size: var(--mp-fs-meta); color: var(--mp-text-muted); }
+.mp-card-summary { --mp-card-accent: var(--mp-primary); font-size: var(--mp-fs-meta); }
+.mp-card-nmnh { --mp-card-accent: var(--mp-nmnh-accent); }
+.mp-card-plain { --mp-card-accent: var(--mp-neutral); --mp-card-bg: var(--mp-surface); }
+
+/* NMNH section: where each value comes from, then the ready count */
 .mp-nmnh-sources { font-size: var(--mp-fs-meta); }
 .mp-nmnh-sources > div { margin: 2px 0; }
 details.mp-nmnh-cols { margin: 4px 0; }
@@ -1129,9 +1151,6 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 }
 
 /* NMNH user: the sunburst is the checkbox, grey when off, colour when on */
-.mp-nmnh-toggle { display: flex; align-items: baseline; gap: 2px; margin-bottom: 8px; }
-.mp-nmnh-toggle .shiny-input-container { width: auto !important; margin-bottom: 0; }
-.mp-nmnh-toggle .pretty { margin: 0; }
 .mp-nmnh-toggle .nmnh-logo {
   height: 1.6em; margin: -0.3em 0.4em -0.3em 0;
   filter: grayscale(1); opacity: 0.45; transition: filter 0.15s, opacity 0.15s;
