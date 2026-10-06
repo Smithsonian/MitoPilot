@@ -178,19 +178,14 @@ You should see a welcome message naming the Nextflow version MitoPilot will use.
 
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
-<strong>Run <code>hydra_setup()</code> once per session.</strong> RStudio Server
+<strong>Hydra setup runs automatically.</strong> RStudio Server
 sessions on Hydra start with a stripped <code>PATH</code> that leaves out the
 job scheduler engine, Java, and your <code>~/bin</code>, so Nextflow cannot find
-<code>qsub</code> and job submission fails. Before creating a project or opening the app,
-you must call the following function:
-
-<pre><code class="r">library(MitoPilot)
-hydra_setup()
-</code></pre>
-
-It puts the Hydra Java and job scheduler directories at the front of your
-<code>PATH</code> and pins a compatible Nextflow version for the session. It has
-no effect anywhere else, and warns if you are not on Hydra.
+<code>qsub</code> and job submission fails. <code>library(MitoPilot)</code> and
+opening the app both detect Hydra and run <code>hydra_setup()</code> for you: it
+puts the Hydra Java and job scheduler directories at the front of your
+<code>PATH</code> and pins a compatible Nextflow version for the session. If
+the setup message does not appear, call <code>hydra_setup()</code> yourself.
 </div>
 
 <hr class="part-break" />

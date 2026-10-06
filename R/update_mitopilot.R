@@ -223,6 +223,17 @@ hydra_setup <- function() {
   invisible(TRUE)
 }
 
+#' Apply the Hydra environment when the session has not been set up
+#'
+#' Runs when MitoPilot is attached and when the app starts. Does nothing off
+#' Hydra, or once `qsub` is already on `PATH`.
+#' @noRd
+ensure_hydra_setup <- function() {
+  if (!is_hydra_cluster() || nzchar(Sys.which("qsub"))) return(invisible(FALSE))
+  message("NMNH Hydra detected: running hydra_setup() for this session.")
+  hydra_setup()
+}
+
 #' Hydra-specific submission script
 #'
 #' Reproduces the script format used by the non-headless "Submit as Job" handler

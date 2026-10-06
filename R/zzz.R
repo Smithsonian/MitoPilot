@@ -1,4 +1,10 @@
 .onAttach <- function(libname, pkgname) {
+  # Hydra sessions lack Java and qsub on PATH, so set up before probing Nextflow
+  if (!in_r_build_context()) {
+    tryCatch(ensure_hydra_setup(), error = function(e) {
+      packageStartupMessage("Hydra setup failed: ", conditionMessage(e), ". Run hydra_setup() by hand.")
+    })
+  }
   version <- nf_installed_version()
 
   if (is.na(version)) {

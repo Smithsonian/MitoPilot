@@ -305,11 +305,10 @@ cheaper to discover on a small test run.
 <div class="alert alert-hydra">
 <span class="hydra-tag">HYDRA</span>
 <strong>A Hydra project in full.</strong> Keep the data and the project on
-<code>/pool</code> or <code>/scratch</code> (not <code>/store</code>), and call
-<code>hydra_setup()</code> before anything else in the session:
+<code>/pool</code> or <code>/scratch</code> (not <code>/store</code>).
+<code>library(MitoPilot)</code> sets up the Hydra environment for the session:
 
 <pre><code class="r">library(MitoPilot)
-hydra_setup()
 
 new_project(
   path = "/pool/public/genomics/&lt;&lt;USER&gt;&gt;/octocorals/run_01",
