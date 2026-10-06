@@ -1133,10 +1133,6 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 .mp-nmnh-toggle { display: flex; align-items: baseline; gap: 2px; margin-bottom: 8px; }
 .mp-nmnh-toggle .shiny-input-container { width: auto !important; margin-bottom: 0; }
 .mp-nmnh-toggle .pretty { margin: 0; }
-.mp-nmnh-toggle .pretty .state label { text-indent: 0; padding-left: 0; }
-.mp-nmnh-toggle .pretty .state label::before,
-.mp-nmnh-toggle .pretty .state label::after,
-.mp-nmnh-toggle .pretty .state .icon { display: none !important; }
 .mp-nmnh-toggle .nmnh-logo {
   height: 1.6em; margin: -0.3em 0.4em -0.3em 0;
   filter: grayscale(1); opacity: 0.45; transition: filter 0.15s, opacity 0.15s;
@@ -1149,8 +1145,9 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 /* NMNH voucher report: tables scroll inside the window; one button size,
    and the CSV upload shows as a single button */
 .mp-nmnh-scroll { max-height: 35vh; overflow-y: auto; }
-.mp-nmnh-actions { display: flex; flex-flow: row wrap; gap: 8px; align-items: center; margin-top: 12px; }
-.mp-nmnh-actions .btn { height: 30px; margin: 0; padding: 4px 10px; font-size: 12px; line-height: 1.5; }
+.modal-footer:has(.mp-nmnh-actions) { display: flex; align-items: center; gap: 8px; }
+.mp-nmnh-actions { display: flex; flex-flow: row wrap; gap: 8px; align-items: center; margin-right: auto; }
+.mp-nmnh-actions .btn, .modal-footer:has(.mp-nmnh-actions) > .btn { height: 30px; margin: 0; padding: 4px 10px; font-size: 12px; line-height: 1.5; }
 .mp-nmnh-actions .shiny-input-container { width: auto !important; margin-bottom: 0; }
 .mp-nmnh-actions .shiny-input-container > label { display: none; }
 .mp-nmnh-actions .input-group, .mp-nmnh-actions .input-group-btn { display: flex; margin: 0; }
@@ -1161,3 +1158,7 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 /* Database check failed: say so in the header, since the app stops loading */
 .mp-header .mp-header-warn { color: var(--mp-warning); font-weight: 600; }
 .mp-header .mp-header-warn code { font-weight: 400; }
+
+/* Metadata viewer: per-value copy button, shown on row hover */
+.mp-meta-level .mp-meta-copy { padding: 0 4px; margin-left: 4px; opacity: 0; color: var(--mp-text-muted, #6c757d); }
+.mp-meta-level tr:hover .mp-meta-copy, .mp-meta-level .mp-meta-copy:focus-visible { opacity: 1; }
