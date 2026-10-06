@@ -27,13 +27,13 @@
 #' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 #'   Passed to `new_db()`.
-#' @param mapping_biosample Name of the mapping-file column holding NCBI
+#' @param mapping_ncbi Name of the mapping-file column holding NCBI
 #'   BioSample or SRA accessions (optional). Must not be the sample ID column.
 #'   Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
 #'   Passed to `new_db()`.
-#' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
+#' @param fetch_ncbi Fetch NCBI metadata for samples with a BioSample
 #'   value during setup (default TRUE). Set FALSE when offline and run
-#'   [fetch_biosample()] later.
+#'   [fetch_ncbi()] later.
 #'   Passed to `new_db()`.
 #' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
 #'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
@@ -81,8 +81,8 @@ new_project <- function(
     fetch_geome = TRUE,
     mapping_gbif = "GBIF_ID",
     fetch_gbif = TRUE,
-    mapping_biosample = "BioSample",
-    fetch_biosample = TRUE,
+    mapping_ncbi = "BioSample",
+    fetch_ncbi = TRUE,
     link_sources = FALSE,
     data_path = NULL,
     min_depth = 2000000,
@@ -106,8 +106,8 @@ new_project <- function(
   dots$fetch_geome <- fetch_geome
   dots$mapping_gbif <- mapping_gbif
   dots$fetch_gbif <- fetch_gbif
-  dots$mapping_biosample <- mapping_biosample
-  dots$fetch_biosample <- fetch_biosample
+  dots$mapping_ncbi <- mapping_ncbi
+  dots$fetch_ncbi <- fetch_ncbi
   dots$link_sources <- link_sources
   preflight_project(
     path = path, mapping_fn = mapping_fn, mapping_id = mapping_id,
@@ -159,8 +159,8 @@ new_project <- function(
     fetch_geome = fetch_geome,
     mapping_gbif = mapping_gbif,
     fetch_gbif = fetch_gbif,
-    mapping_biosample = mapping_biosample,
-    fetch_biosample = fetch_biosample,
+    mapping_ncbi = mapping_ncbi,
+    fetch_ncbi = fetch_ncbi,
     link_sources = link_sources,
     seeds_db = custom_seeds_db,
     labels_db = custom_labels_db,

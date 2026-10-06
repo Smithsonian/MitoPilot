@@ -23,12 +23,12 @@
 #'   Passed to `new_db_userAsmb()`.
 #' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID during setup
 #'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
-#' @param mapping_biosample Name of the mapping-file column holding NCBI
+#' @param mapping_ncbi Name of the mapping-file column holding NCBI
 #'   BioSample or SRA accessions (optional). Must not be the sample ID column.
 #'   Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
-#' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
+#' @param fetch_ncbi Fetch NCBI metadata for samples with a BioSample
 #'   value during setup (default TRUE). Set FALSE when offline and run
-#'   [fetch_biosample()] later.
+#'   [fetch_ncbi()] later.
 #' @param link_sources Follow links between GEOME, GBIF, and NCBI records to
 #'   fill in IDs a sample does not have yet (default FALSE). Saved as the project
 #'   setting. See `vignette("Specimen-Metadata")`.
@@ -105,8 +105,8 @@ new_project_userAsmb <- function(
     fetch_geome = TRUE,
     mapping_gbif = "GBIF_ID",
     fetch_gbif = TRUE,
-    mapping_biosample = "BioSample",
-    fetch_biosample = TRUE,
+    mapping_ncbi = "BioSample",
+    fetch_ncbi = TRUE,
     link_sources = FALSE,
     data_path = NULL,
     no_raw_data = FALSE,
@@ -134,8 +134,8 @@ new_project_userAsmb <- function(
   dots$fetch_geome <- fetch_geome
   dots$mapping_gbif <- mapping_gbif
   dots$fetch_gbif <- fetch_gbif
-  dots$mapping_biosample <- mapping_biosample
-  dots$fetch_biosample <- fetch_biosample
+  dots$mapping_ncbi <- mapping_ncbi
+  dots$fetch_ncbi <- fetch_ncbi
   dots$link_sources <- link_sources
   if (no_raw_data) {
     data_path <- "NA"
@@ -200,8 +200,8 @@ new_project_userAsmb <- function(
     fetch_geome = fetch_geome,
     mapping_gbif = mapping_gbif,
     fetch_gbif = fetch_gbif,
-    mapping_biosample = mapping_biosample,
-    fetch_biosample = fetch_biosample,
+    mapping_ncbi = mapping_ncbi,
+    fetch_ncbi = fetch_ncbi,
     link_sources = link_sources,
     assembly_path = assembly_path,
     no_raw_data = no_raw_data,

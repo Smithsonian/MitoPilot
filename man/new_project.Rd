@@ -12,8 +12,8 @@ new_project(
   fetch_geome = TRUE,
   mapping_gbif = "GBIF_ID",
   fetch_gbif = TRUE,
-  mapping_biosample = "BioSample",
-  fetch_biosample = TRUE,
+  mapping_ncbi = "BioSample",
+  fetch_ncbi = TRUE,
   link_sources = FALSE,
   data_path = NULL,
   min_depth = 2e+06,
@@ -66,14 +66,14 @@ Passed to `new_db()`.}
 (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
 Passed to `new_db()`.}
 
-\item{mapping_biosample}{Name of the mapping-file column holding NCBI
+\item{mapping_ncbi}{Name of the mapping-file column holding NCBI
 BioSample or SRA accessions (optional). Must not be the sample ID column.
 Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
 Passed to `new_db()`.}
 
-\item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample
+\item{fetch_ncbi}{Fetch NCBI metadata for samples with a BioSample
 value during setup (default TRUE). Set FALSE when offline and run
-[fetch_biosample()] later.
+[fetch_ncbi()] later.
 Passed to `new_db()`.}
 
 \item{link_sources}{Follow links between GEOME, GBIF, and NCBI records to

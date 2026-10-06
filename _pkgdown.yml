@@ -90,7 +90,7 @@ reference:
   - update_sample_metadata
   - fetch_geome
   - fetch_gbif
-  - fetch_biosample
+  - fetch_ncbi
   - remove_metadata
   - set_metadata_columns
   - geome_normalize_bcid

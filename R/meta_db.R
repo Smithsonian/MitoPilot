@@ -12,7 +12,7 @@ META_SOURCES <- list(
     chain = function(ref, cache) .gbif_fetch_chain(ref, cache)
   ),
   NCBI = list(
-    col = "BioSample", label = "NCBI", id_label = "BioSample or SRA accession", arg = "biosamples",
+    col = "BioSample", label = "NCBI", id_label = "BioSample or SRA accession", arg = "ncbi_ids",
     normalize = function(x) ncbi_normalize_id(x),
     invalid = function(x) paste0("'", x, "' is not a BioSample or SRA accession (expected SAMN..., SRR..., or digits)"),
     chain = function(ref, cache) .ncbi_fetch_chain(ref, cache)

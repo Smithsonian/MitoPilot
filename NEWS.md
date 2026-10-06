@@ -1,5 +1,9 @@
 # MitoPilot (development version)
 
+## Breaking changes
+
+- **NCBI names.** The NCBI setup arguments are now `mapping_ncbi` and `fetch_ncbi` (were `mapping_biosample` and `fetch_biosample`), since they take SRA accessions as well as BioSamples. `fetch_biosample()` is now `fetch_ncbi()`, and its `biosamples` argument is now `ncbi_ids`. The mapping-file column still defaults to `BioSample`, and existing projects need no changes.
+
 ## New Features
 
 - **Test projects come with sample metadata.** `new_test_project()` and `new_test_project_userAsmb()` now fetch each sample's NCBI metadata from its SRA run (synthetic samples use the run they were built from) and follow links to GBIF and GEOME, with linking saved as the project setting. Pass `fetch_metadata = FALSE` when offline.

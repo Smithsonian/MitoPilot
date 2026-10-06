@@ -123,7 +123,7 @@ new_test_project_userAsmb <- function(
     executor = executor,
     Rproj = Rproj,
     force = force,
-    fetch_biosample = fetch_metadata,
+    fetch_ncbi = fetch_metadata,
     link_sources = TRUE,
     ...
   )

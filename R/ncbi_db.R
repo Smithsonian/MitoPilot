@@ -8,7 +8,7 @@
 #'
 #' @param path Path to the project directory (default = current working directory)
 #' @param ids Sample IDs to fetch. Default: every sample with a BioSample value.
-#' @param biosamples Optional BioSample or SRA accessions to set for `ids` first
+#' @param ncbi_ids Optional BioSample or SRA accessions to set for `ids` first
 #'   (same length as `ids`). A blank value removes that sample's BioSample and
 #'   its NCBI data.
 #' @param link_sources Follow links to GEOME, GBIF, or NCBI records named in the
@@ -16,6 +16,6 @@
 #'   uses the project setting.
 #' @return Invisibly, a data frame of `ID`, `status`, and `message`.
 #' @export
-fetch_biosample <- function(path = ".", ids = NULL, biosamples = NULL, link_sources = NULL) {
-  .meta_fetch_project(path, "NCBI", ids, biosamples, link = link_sources)
+fetch_ncbi <- function(path = ".", ids = NULL, ncbi_ids = NULL, link_sources = NULL) {
+  .meta_fetch_project(path, "NCBI", ids, ncbi_ids, link = link_sources)
 }

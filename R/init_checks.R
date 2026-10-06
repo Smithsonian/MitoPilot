@@ -190,7 +190,7 @@ check_sample_ids <- function(ids, iss = .issues()) {
 check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
                           mapping_geome = "GEOME_BCID",
                           mapping_gbif = "GBIF_ID",
-                          mapping_biosample = "BioSample",
+                          mapping_ncbi = "BioSample",
                           need_reads = TRUE, user_asmb = FALSE,
                           data_path = NULL, assembly_path = NULL,
                           check_assemblies = FALSE, find_mitogenome = FALSE,
@@ -214,7 +214,7 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
   if (user_asmb && "Assembly" %nin% cols) {
     iss$err("mapping columns: 'Assembly' column not found")
   }
-  src_cols <- c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample)
+  src_cols <- c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_ncbi)
   for (src in names(src_cols)[src_cols == mapping_id]) {
     iss$err("mapping columns: the sample ID column '", mapping_id, "' can't also be the ",
             src, " ID column; copy the IDs into their own column")
@@ -235,9 +235,9 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
     }
     reserved <- c(reserved, "GBIF_ID")
   }
-  if (mapping_biosample != "BioSample") {
-    if (mapping_biosample %nin% cols) {
-      iss$err("mapping columns: BioSample column '", mapping_biosample, "' not found")
+  if (mapping_ncbi != "BioSample") {
+    if (mapping_ncbi %nin% cols) {
+      iss$err("mapping columns: BioSample column '", mapping_ncbi, "' not found")
     }
     reserved <- c(reserved, "BioSample")
   }
@@ -288,8 +288,8 @@ check_mapping <- function(mapping, mapping_id = "ID", mapping_taxon = "Taxon",
   }
 
   # NCBI BioSample / SRA ----
-  if (mapping_biosample %in% cols) {
-    raw <- trimws(.meta_chr(mapping[[mapping_biosample]]))
+  if (mapping_ncbi %in% cols) {
+    raw <- trimws(.meta_chr(mapping[[mapping_ncbi]]))
     raw[is.na(raw)] <- ""
     bad <- nzchar(raw) & is.na(ncbi_normalize_id(raw))
     if (any(bad)) {
@@ -596,7 +596,7 @@ preflight_project <- function(path, mapping_fn, mapping_id, data_path, no_raw_da
                   mapping_taxon = dots$mapping_taxon %||% "Taxon",
                   mapping_geome = dots$mapping_geome %||% "GEOME_BCID",
                   mapping_gbif = dots$mapping_gbif %||% "GBIF_ID",
-                  mapping_biosample = dots$mapping_biosample %||% "BioSample",
+                  mapping_ncbi = dots$mapping_ncbi %||% "BioSample",
                   need_reads = !no_raw_data, user_asmb = user_asmb,
                   data_path = if (no_raw_data) NULL else data_path,
                   assembly_path = assembly_path, check_assemblies = user_asmb,
@@ -629,9 +629,9 @@ preflight_project <- function(path, mapping_fn, mapping_id, data_path, no_raw_da
     .check_resource("https://api.gbif.org/v1/enumeration/country", "GBIF", iss = iss)
   }
 
-  ncbi_col <- dots$mapping_biosample %||% "BioSample"
+  ncbi_col <- dots$mapping_ncbi %||% "BioSample"
   if (!is.null(mapping) && ncbi_col %in% colnames(mapping) &&
-      !isFALSE(dots$fetch_biosample) &&
+      !isFALSE(dots$fetch_ncbi) &&
       any(!is.na(ncbi_normalize_id(mapping[[ncbi_col]])))) {
     .check_ncbi_reachable(iss)
   }

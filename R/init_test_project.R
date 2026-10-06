@@ -133,7 +133,7 @@ new_test_project <- function(
     min_depth = 500,
     executor = executor,
     Rproj = Rproj,
-    fetch_biosample = fetch_metadata,
+    fetch_ncbi = fetch_metadata,
     link_sources = TRUE,
     ...
   )
