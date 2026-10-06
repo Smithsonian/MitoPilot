@@ -167,7 +167,7 @@ meta_record_view <- function(recs, source, box_id) {
       if (length(cit)) p(class = "mp-meta-citation", em(cit[1])),
       tags$table(class = "table table-sm",
         tags$tbody(lapply(seq_len(nrow(r)), function(j) {
-          tags$tr(tags$th(r$field[j]), tags$td(cell(r$field[j], r$value[j])))
+          tags$tr(tags$th(r$field[j]), tags$td(cell(r$field[j], r$value[j]), meta_copy_btn(r$value[j])))
         }))
       )
     )
@@ -176,6 +176,31 @@ meta_record_view <- function(recs, source, box_id) {
     div(style = "margin-bottom: 6px;", toggle("Expand all", TRUE), " ", toggle("Collapse all", FALSE)),
     div(id = box_id, style = "max-height: 50vh; overflow-y: auto;", cards)
   )
+}
+
+#' Small button that copies one value to the clipboard
+#' @noRd
+meta_copy_btn <- function(value) {
+  tags$button(
+    type = "button", class = "btn btn-link btn-xs mp-meta-copy", `data-v` = value,
+    title = "Copy value", `aria-label` = "Copy value",
+    onclick = paste0(
+      "navigator.clipboard.writeText(this.dataset.v); var i = this.querySelector('i');",
+      "i.className = 'fa-solid fa-check'; setTimeout(function() { i.className = 'fa-regular fa-copy'; }, 1000);"),
+    icon("copy", class = "fa-regular")
+  )
+}
+
+#' One sample's metadata as long rows: mapping-file columns, then every fetched record
+#' @noRd
+sample_metadata_long <- function(con, id) {
+  s <- DBI::dbGetQuery(con, "SELECT * FROM samples WHERE ID = ?", params = list(id))
+  cols <- c("Taxon", export_metadata_cols(names(s), character()))
+  m <- data.frame(source = "Mapping file", level = NA_character_, ref = NA_character_,
+                  field = cols, value = vapply(cols, function(k) as.character(s[[k]][1]), ""))
+  recs <- DBI::dbGetQuery(con, "SELECT source, level, ref, field, value FROM meta_records
+                                WHERE ID = ? ORDER BY source, depth", params = list(id))
+  cbind(ID = id, rbind(m, recs), row.names = NULL)
 }
 
 #' Compare tab table: one row per concept across the CSV and every source
@@ -255,8 +280,11 @@ specimen_csv_map_ui <- function(ns, current, overrides, choices) {
 #' @param id module id
 #' @param open reactive yielding the sample ID to open (from a `specimen_open` input)
 #' @param on_change function called after any DB write, so the caller can refresh its table
+#' @param on_back optional function for a footer button that returns to the caller's modal
+#' @param back_label label for that button
 #' @noRd
-specimen_viewer_server <- function(id, open, on_change = function() NULL) {
+specimen_viewer_server <- function(id, open, on_change = function() NULL,
+                                   on_back = NULL, back_label = "Back") {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     con <- session$userData$con
@@ -345,14 +373,26 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
           )
         ),
         footer = mp_footer(
-          extra = actionButton(ns("refresh_all"), "Refresh all",
-                               title = "Fetch every sample's GEOME, GBIF, and NCBI records again"),
+          extra = tagList(
+            if (!is.null(on_back)) actionButton(ns("back"), back_label, icon = icon("arrow-left")),
+            downloadButton(ns("csv"), "Export CSV", class = "btn-default",
+                           title = "Save every metadata field for this sample as a CSV file"),
+            actionButton(ns("refresh_all"), "Refresh all",
+                         title = "Fetch every sample's GEOME, GBIF, and NCBI records again")
+          ),
           dismiss = "Close"
         )
       ) |> showModal()
     })
 
     observeEvent(input$sample, rv$id <- input$sample, ignoreInit = TRUE)
+    if (!is.null(on_back)) observeEvent(input$back, on_back())
+    output$csv <- downloadHandler(
+      filename = function() paste0(rv$id, "_metadata.csv"),
+      content = function(file) {
+        utils::write.csv(sample_metadata_long(con, rv$id), file, row.names = FALSE, na = "")
+      }
+    )
 
     output$hdr_id <- renderText(rv$id)
     output$hdr_taxon <- renderText({

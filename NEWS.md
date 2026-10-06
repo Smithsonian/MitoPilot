@@ -13,6 +13,7 @@
 - **Copy sequence in the sequence viewers.** The Annotate sequence viewer and the MapToRef coverage viewer have a **Copy sequence** button that copies the bases currently in view as FASTA, at any zoom level (letters need not be showing). In MapToRef, the reference and consensus are copied as two records.
 
 - **NMNH user switch in Export Data.** Adds the `[specimen_voucher=]` and `[voucherURI=]` modifiers NMNH requires on GenBank submissions, fills them per sample from your mapping file, GBIF, NCBI, or GEOME, checks the voucher codes and EZIDs (a tissue EZID is replaced with its parent specimen), and reports samples that are missing or wrong. Fix them in the report or with a CSV round trip. See `vignette("Specimen-Metadata")`.
+- **Sample metadata from the voucher report.** Click a sample ID in the NMNH voucher report to open its metadata, then return to the report. The metadata window now has a copy button on every value and **Export CSV** to save all of a sample's metadata.
 
 ## Changes
 

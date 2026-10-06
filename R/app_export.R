@@ -114,6 +114,10 @@ export_server <- function(id) {
 
     specimen_viewer_server("specimen", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_export"))
+    specimen_viewer_server("nmnh_spec", open = reactive(input$nmnh_meta_open),
+                           on_change = function() trigger("refresh_export"),
+                           on_back = function() nmnh_show_report(),
+                           back_label = "Back to voucher report")
     meta_view_open <- meta_view_setup(input, output, session)
     fetch_data <- function() meta_view_join(fetch_export_data(), session$userData$con)
 
@@ -1215,16 +1219,18 @@ export_server <- function(id) {
             ))
           )
         },
-        div(
-          class = "mp-nmnh-actions",
-          uiOutput(ns("nmnh_copy")),
-          actionButton(ns("nmnh_recheck"), "Re-check with GBIF", class = "btn-sm",
-                       title = "Ask GBIF again about this group's specimen links"),
-          downloadButton(ns("nmnh_csv"), "Download CSV for bulk edit", class = "btn-sm btn-default"),
-          fileInput(ns("nmnh_upload"), NULL, accept = ".csv", buttonLabel = "Upload edited CSV",
-                    placeholder = "CSV file")
-        ),
-        footer = mp_footer(primary = actionButton(ns("nmnh_back"), "Back to export"), dismiss = NULL)
+        footer = mp_footer(
+          primary = actionButton(ns("nmnh_back"), "Back to export"), dismiss = NULL,
+          extra = div(
+            class = "mp-nmnh-actions",
+            uiOutput(ns("nmnh_copy")),
+            actionButton(ns("nmnh_recheck"), "Re-check with GBIF", class = "btn-sm",
+                         title = "Ask GBIF again about this group's specimen links"),
+            downloadButton(ns("nmnh_csv"), "Download CSV for bulk edit", class = "btn-sm btn-default"),
+            fileInput(ns("nmnh_upload"), NULL, accept = ".csv", buttonLabel = "Upload edited CSV",
+                      placeholder = "CSV file")
+          )
+        )
       ) |> showModal()
     }
     observeEvent(input$nmnh_report, nmnh_show_report())
@@ -1273,7 +1279,15 @@ export_server <- function(id) {
         compact = TRUE, pagination = FALSE,
         language = reactable::reactableLang(noData = "No NMNH problems."),
         columns = list(
-          ID = reactable::colDef(minWidth = 110),
+          ID = reactable::colDef(minWidth = 110, html = TRUE, cell = function(value) {
+            as.character(tags$a(
+              href = "#", title = "View this sample's metadata",
+              onclick = sprintf(
+                "event.preventDefault(); Shiny.setInputValue('%s', %s, {priority: 'event'})",
+                ns("nmnh_meta_open"), jsonlite::toJSON(value, auto_unbox = TRUE)),
+              value
+            ))
+          }),
           specimen_voucher = reactable::colDef(minWidth = 230, html = TRUE, cell = cell("voucher")),
           voucherURI = reactable::colDef(minWidth = 330, html = TRUE, cell = cell("uri"))
         )
