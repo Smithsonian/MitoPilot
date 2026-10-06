@@ -1131,6 +1131,7 @@ details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
 
 /* NMNH user: the sunburst is the checkbox, grey when off, colour when on */
 .mp-nmnh-toggle { display: flex; align-items: baseline; gap: 2px; margin-bottom: 8px; }
+.mp-nmnh-toggle .shiny-input-container { width: auto !important; margin-bottom: 0; }
 .mp-nmnh-toggle .pretty { margin: 0; }
 .mp-nmnh-toggle .pretty .state label { text-indent: 0; padding-left: 0; }
 .mp-nmnh-toggle .pretty .state label::before,
