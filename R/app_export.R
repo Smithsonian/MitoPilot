@@ -786,16 +786,23 @@ export_server <- function(id) {
             uiOutput(ns("nmnh_sources")),
             tags$details(
               class = "mp-nmnh-cols",
-              open = if (is.na(nmnh_cols$voucher) && is.na(nmnh_cols$uri)) NA,
-              tags$summary("Change which mapping file columns are used"),
+              tags$summary("Optional: take these from mapping file columns"),
+              opts_help(
+                "Not required. Samples with GBIF, NCBI, or GEOME IDs get their catalog ",
+                "number and specimen link looked up there. A column picked here is ",
+                "used first, and the databases fill any gaps.",
+                nested = TRUE
+              ),
               div(
                 style = "display: flex; flex-flow: row nowrap; gap: 1em;",
                 div(style = "flex: 1; min-width: 0;",
                     selectInput(ns("nmnh_voucher_col"), "Catalog number column (e.g. USNM:FISH:12345)",
-                                nmnh_choices, selected = nmnh_cols$voucher %|NA|% "", width = "100%")),
+                                nmnh_choices, selected = nmnh_cols$voucher %|NA|% "", width = "100%",
+                                selectize = FALSE)),
                 div(style = "flex: 1; min-width: 0;",
                     selectInput(ns("nmnh_uri_col"), "Specimen link column (ARK, e.g. http://n2t.net/ark:/65665/3...)",
-                                nmnh_choices, selected = nmnh_cols$uri %|NA|% "", width = "100%"))
+                                nmnh_choices, selected = nmnh_cols$uri %|NA|% "", width = "100%",
+                                selectize = FALSE))
               )
             ),
             uiOutput(ns("nmnh_status"))

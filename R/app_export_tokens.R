@@ -180,7 +180,7 @@ nmnh_source_text <- function(src, col) {
   tab <- table(factor(src[!is.na(src)], levels = names(lab)))
   tab <- tab[tab > 0]
   miss <- sum(is.na(src))
-  if (!length(tab)) return("not found. Pick a column below, or add GBIF, NCBI, or GEOME IDs.")
+  if (!length(tab)) return("not found yet. Add GBIF, NCBI, or GEOME IDs to your samples, or pick a mapping file column below.")
   paste0("from ", paste(sprintf("%s (%d)", lab[names(tab)], tab), collapse = ", "),
          if (miss) sprintf("; missing for %d", miss), ".")
 }
