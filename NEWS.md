@@ -14,6 +14,8 @@
 
 - **NMNH user switch in Export Data.** Adds the `[specimen_voucher=]` and `[voucherURI=]` modifiers NMNH requires on GenBank submissions, fills them per sample from your mapping file, GBIF, NCBI, or GEOME, checks the voucher codes and EZIDs (a tissue EZID is replaced with its parent specimen), and reports samples that are missing or wrong. Fix them in the report or with a CSV round trip. See `vignette("Specimen-Metadata")`.
 - **Sample metadata from the voucher report.** Click a sample ID in the NMNH voucher report to open its metadata, then return to the report. The metadata window now has a copy button on every value and **Export CSV** to save all of a sample's metadata.
+- **Non-NMNH samples and chosen fields in the voucher report.** Tick **Not NMNH** for samples that are not NMNH specimens: their voucher and URI are used as found, without NMNH checks, and they stay in the report so you can untick them. For any sample, pick the mapping-file column or metadata field its `specimen_voucher` or `voucherURI` comes from (**Choose fields** adds more).
+- **Empty source modifiers are left out of FASTA headers.** When a sample has no value for a `[modifier={field}]` in the header template, that modifier is dropped from its header instead of being written empty or as `NA`.
 
 ## Changes
 

@@ -24,7 +24,15 @@ nmnh_template_add <- function(template) {
 
 nmnh_template_remove <- function(template) sub(nmnh_tokens(), "", template, fixed = TRUE)
 
-nmnh_strip_empty <- function(x) gsub("\\s*\\[(specimen_voucher|voucherURI)=\\s*\\]", "", x)
+# Glue a header template. A [modifier=] whose value comes out empty, NA, or
+# from a column the data lacks is left out, so no header carries a blank value.
+header_fill <- function(dat, template) {
+  tok <- regmatches(template, gregexpr("\\{[A-Za-z.][A-Za-z0-9._]*\\}", template))[[1]]
+  for (n in setdiff(substr(tok, 2L, nchar(tok) - 1L), names(dat))) dat[[n]] <- ""
+  header_strip_empty(stringr::str_glue_data(dat, template))
+}
+
+header_strip_empty <- function(x) gsub("\\s*\\[[^]=[]+=\\s*(NA)?\\s*\\]", "", x)
 
 # GBIF collectionCode (upper case) -> NCBI BioCollections code
 .NMNH_CODES <- c(FISH = "FISH", BIRDS = "Birds", MAMM = "MAMM", HERP = "Herp", IZ = "IZ",
@@ -139,8 +147,62 @@ nmnh_set_columns <- function(con, voucher = NA, uri = NA) {
   DBI::dbExecute(con, paste(
     "CREATE TABLE IF NOT EXISTS nmnh_vouchers (ID TEXT PRIMARY KEY,",
     "specimen_voucher TEXT, specimen_voucher_source TEXT,",
-    "voucherURI TEXT, voucherURI_source TEXT, updated INTEGER)"))
+    "voucherURI TEXT, voucherURI_source TEXT, updated INTEGER,",
+    "not_nmnh INTEGER DEFAULT 0, voucher_field TEXT, uri_field TEXT)"))
+  have <- DBI::dbListFields(con, "nmnh_vouchers")
+  add <- c(not_nmnh = "INTEGER DEFAULT 0", voucher_field = "TEXT", uri_field = "TEXT")
+  for (k in setdiff(names(add), have)) {
+    DBI::dbExecute(con, sprintf("ALTER TABLE nmnh_vouchers ADD COLUMN %s %s", k, add[[k]]))
+  }
   invisible(NULL)
+}
+
+# Mark one sample as not an NMNH specimen: its values are used as found, unchecked
+nmnh_set_not_nmnh <- function(con, id, value) {
+  .nmnh_ensure_table(con)
+  DBI::dbExecute(con, "INSERT OR IGNORE INTO nmnh_vouchers (ID) VALUES (?)", params = list(id))
+  DBI::dbExecute(con, "UPDATE nmnh_vouchers SET not_nmnh = ?, updated = ? WHERE ID = ?",
+                 params = list(as.integer(isTRUE(value)), as.integer(Sys.time()), id))
+  invisible(NULL)
+}
+
+# Take one sample's voucher or URI from a chosen field (a nmnh_field_choices()
+# key); NA or "" goes back to automatic. A typed value for that field is cleared.
+nmnh_set_field <- function(con, id, field, key) {
+  .nmnh_ensure_table(con)
+  key <- if (is.null(key) || is.na(key) || !nzchar(key)) NA_character_ else key
+  DBI::dbExecute(con, "INSERT OR IGNORE INTO nmnh_vouchers (ID) VALUES (?)", params = list(id))
+  DBI::dbExecute(con, sprintf("UPDATE nmnh_vouchers SET %s_field = ?, updated = ? WHERE ID = ?", field),
+                 params = list(key, as.integer(Sys.time()), id))
+  nmnh_set_user(con, id, field, NA_character_, NA_character_)
+}
+
+# Fields a voucher or URI can be taken from: mapping-file columns, then the
+# metadata fields ticked for export. Named key -> label.
+nmnh_field_choices <- function(con) {
+  .meta_ensure_tables(con)
+  cols <- c("Taxon", export_metadata_cols(DBI::dbListFields(con, "samples"), character()))
+  keys <- DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key
+  c(stats::setNames(paste0("map:", cols), paste("Mapping file:", cols)),
+    stats::setNames(keys, .nmnh_key_label(keys)))
+}
+
+.nmnh_key_label <- function(key) {
+  if (!length(key)) return(character())
+  map <- startsWith(key, "map:")
+  out <- paste0(toupper(sub(":.*", "", key)), ": ",
+                gsub(":", " ", sub("^[^:]+:(raw|combo):", "", key)))
+  out[map] <- paste("Mapping file:", substring(key[map], 5))
+  out
+}
+
+# One sample's value for a field key: row is its samples row, recs its meta_records
+.nmnh_key_value <- function(row, recs, key) {
+  if (startsWith(key, "map:")) {
+    col <- substring(key, 5)
+    return(if (col %in% names(row)) .meta_chr(row[[col]])[1] else NA_character_)
+  }
+  .meta_key_value(recs[recs$source == toupper(sub(":.*", "", key)), , drop = FALSE], key)
 }
 
 # Sources set by the user; automatic lookups never overwrite these
@@ -166,6 +228,12 @@ nmnh_edit_value <- function(con, id, field, value, source = "entered") {
   value <- trimws(value %|NA|% "")
   if (!nzchar(value)) {
     nmnh_set_user(con, id, field, NA_character_, NA_character_)
+    return(NULL)
+  }
+  .nmnh_ensure_table(con)
+  flag <- DBI::dbGetQuery(con, "SELECT not_nmnh FROM nmnh_vouchers WHERE ID = ?", params = list(id))$not_nmnh
+  if (isTRUE(flag == 1)) {
+    nmnh_set_user(con, id, field, value, source)
     return(NULL)
   }
   n <- if (field == "voucher") nmnh_normalize_voucher(value) else nmnh_normalize_uri(value)
@@ -216,6 +284,8 @@ nmnh_source_label <- function(src) {
   out[m] <- sprintf("mapping file column \"%s\"", substring(src[m], 9))
   out[src %in% "entered"] <- "typed in the report"
   out[src %in% "upload"] <- "uploaded CSV"
+  f <- !is.na(src) & startsWith(src, "field:")
+  out[f] <- sprintf("chosen field \"%s\"", .nmnh_key_label(substring(src[f], 7)))
   out
 }
 
@@ -243,6 +313,32 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE, save
             GEOME = GEOME_COMBOS$specimen_voucher$fn(src("GEOME")))
     uc <- c(user("voucherURI"), mf(cols$uri), GBIF = .gbif_occ(gb, "occurrenceID"),
             NCBI = .nmnh_any_ark(src("NCBI")), GEOME = .nmnh_any_ark(src("GEOME")))
+    # A chosen field replaces the automatic sources; a typed value still wins
+    pick <- function(f) if (nrow(st) && !is.na(st[[f]][1]) && nzchar(st[[f]][1])) st[[f]][1] else NA_character_
+    vf <- pick("voucher_field")
+    uf <- pick("uri_field")
+    if (!is.na(vf)) vc <- c(user("specimen_voucher"), stats::setNames(.nmnh_key_value(row, r, vf), paste0("field:", vf)))
+    if (!is.na(uf)) uc <- c(user("voucherURI"), stats::setNames(.nmnh_key_value(row, r, uf), paste0("field:", uf)))
+    out <- function(v, u, v_bad = character(), u_bad = character(), checked = FALSE, not_nmnh = FALSE) {
+      data.frame(ID = id, nmnh_specimen_voucher = v$value, nmnh_voucherURI = u$value,
+                 voucher_source = v$source, uri_source = u$source,
+                 voucher_note = paste(c(v_bad, v$notes), collapse = "; "),
+                 uri_note = paste(c(u_bad, u$notes), collapse = "; "),
+                 ok = !length(c(v_bad, u_bad)), voucher_ok = !length(v_bad), uri_ok = !length(u_bad),
+                 fixed = v$fixed || u$fixed || length(c(v$notes, u$notes)) > 0,
+                 checked = checked, not_nmnh = not_nmnh, voucher_field = vf, uri_field = uf)
+    }
+    if (nrow(st) && isTRUE(st$not_nmnh[1] == 1)) {
+      raw <- function(cand) {
+        for (k in names(cand)) {
+          if (!is.na(cand[[k]]) && nzchar(trimws(cand[[k]]))) {
+            return(list(value = trimws(cand[[k]]), source = k, fixed = FALSE, notes = character()))
+          }
+        }
+        list(value = NA_character_, source = NA_character_, fixed = FALSE, notes = character())
+      }
+      return(out(raw(vc), raw(uc), not_nmnh = TRUE))
+    }
     first <- function(cand, norm) {
       notes <- character()
       for (k in names(cand)) {
@@ -295,13 +391,7 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE, save
     }
     if (is.na(v$value)) v_bad <- c(v_bad, "missing")
     if (is.na(u$value)) u_bad <- c(u_bad, "missing")
-    data.frame(ID = id, nmnh_specimen_voucher = v$value, nmnh_voucherURI = u$value,
-               voucher_source = v$source, uri_source = u$source,
-               voucher_note = paste(c(v_bad, v$notes), collapse = "; "),
-               uri_note = paste(c(u_bad, u$notes), collapse = "; "),
-               ok = !length(c(v_bad, u_bad)), voucher_ok = !length(v_bad), uri_ok = !length(u_bad),
-               fixed = v$fixed || u$fixed || length(c(v$notes, u$notes)) > 0,
-               checked = checked)
+    out(v, u, v_bad, u_bad, checked)
   })
   res <- dplyr::as_tibble(do.call(rbind, rows))
   if (save) .nmnh_save(con, res, stored)
