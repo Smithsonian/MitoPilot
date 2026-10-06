@@ -107,12 +107,19 @@ META_SOURCES <- list(
   val
 }
 
-.meta_fetch_into <- function(con, source, ids, refs, cache = new.env(), link = FALSE) {
+.meta_fetch_into <- function(con, source, ids, refs, cache = new.env(), link = FALSE,
+                             verbose = TRUE) {
   .meta_ensure_tables(con)
   src <- META_SOURCES[[source]]
   status <- character(length(ids))
   msg <- rep(NA_character_, length(ids))
+  if (verbose) {
+    message("Fetching ", src$label, " metadata for ", length(ids), " sample(s)...")
+    pb <- cli::cli_progress_bar(total = length(ids), clear = TRUE, .auto_close = FALSE)
+    on.exit(cli::cli_progress_done(pb), add = TRUE)
+  }
   for (i in seq_along(ids)) {
+    if (verbose) cli::cli_progress_update(id = pb)
     r <- refs[i]
     res <- if (is.na(src$normalize(r))) {
       simpleError(src$invalid(r))
@@ -137,9 +144,11 @@ META_SOURCES <- list(
     })
   }
   if (isTRUE(link)) {
+    if (verbose) message("Following links to other metadata sources...")
     for (id in ids[status == "ok"]) tryCatch(.meta_link_sample(con, id), error = function(e) NULL)
   }
   out <- data.frame(ID = ids, status = status, message = msg)
+  if (verbose) message(src$label, " fetch done: ", sum(status == "ok"), " of ", length(ids), " sample(s) fetched.")
   bad <- out$status == "failed"
   if (any(bad)) {
     warning(src$label, " fetch failed for ",

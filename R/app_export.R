@@ -1407,14 +1407,14 @@ export_server <- function(id) {
     }
 
     # Write the export files for the current group using the stashed options,
-    # with review off (flagging already happened up front). Shown behind a waiter
-    # overlay since this runs after the export modal is gone.
+    # with review off (flagging already happened up front).
     write_export_files <- function() {
       p <- rv$export_params
       if (is.null(p)) return(invisible(NULL))
       # export_files() can stop() (e.g. a sample still has multiple assembly paths).
       # Catch it so the app shows a clean alert instead of crashing the session.
       ok <- tryCatch({
+        withProgress(message = "Exporting...", detail = "Writing files. Hold tight.", value = 0.5,
         export_files(
           group = rv$review_group,
           fasta_header = p$fasta_header,
@@ -1426,10 +1426,9 @@ export_server <- function(id) {
           start_aa = rv$review_start,
           stop_aa = rv$review_stop,
           ident_pct = rv$review_ident
-        )
+        ))
         TRUE
       }, error = function(e) {
-        waiter::waiter_hide()
         mp_alert(
           title = "Export failed",
           text = conditionMessage(e),
@@ -1446,14 +1445,6 @@ export_server <- function(id) {
     # the DB), then show the export-complete popup. Used both when the user clicks
     # "Done" and when review finds nothing to flag.
     finalize_export <- function(extra = NULL) {
-      waiter::waiter_show(
-        html = tagList(
-          waiter::spin_fading_circles(),
-          tags$h4(style = "color:white; margin-top:1em;", "Writing export files, hold tight...")
-        ),
-        color = "rgba(40,40,40,0.85)"
-      )
-      on.exit(waiter::waiter_hide())
       write_export_files()
       show_export_done_alert(extra = extra)
     }

@@ -188,7 +188,7 @@
           DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = ? WHERE ID = ?"), params = list(ref, id))
           DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, ?, ?, NULL)",
                          params = list(id, tgt, ref, cand$via))
-          if (!tgt %in% done) suppressWarnings(.meta_fetch_into(con, tgt, id, ref, caches[[tgt]]))
+          if (!tgt %in% done) suppressWarnings(.meta_fetch_into(con, tgt, id, ref, caches[[tgt]], verbose = FALSE))
         } else if (cur != ref && !.meta_link_same(con, id, tgt, ref)) {
           if (linked) {
             DBI::dbExecute(con, "UPDATE meta_links SET note = ? WHERE ID = ? AND source = ?", params = list(
