@@ -137,7 +137,17 @@ run_reports_server <- function(id) {
       req(length(i) == 1, !is.null(df), i <= nrow(df))
       rpt <- df$report[i]
       if (is.na(rpt) || !file.exists(rpt)) {
-        return(p(style = "margin-top: 1em;", "No report yet: the run has not recorded a finish."))
+        log <- df$log[i]
+        if (is.na(log) || !file.exists(log)) {
+          return(p(style = "margin-top: 1em;", "No report yet: the run has not recorded a finish."))
+        }
+        invalidateLater(15000)
+        return(div(
+          style = "margin-top: 1em;",
+          p("No report yet: the run has not recorded a finish. Progress from its Nextflow log, ",
+            "updated every 15 seconds. A run with no log update for a long time may have stopped."),
+          tags$pre(style = "max-height: 40vh; overflow: auto;", run_progress_text(log))
+        ))
       }
       txt <- tryCatch(paste(readLines(rpt, warn = FALSE), collapse = "\n"),
                       error = function(e) "The report could not be read.")

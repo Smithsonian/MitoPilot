@@ -422,3 +422,71 @@ list_run_reports <- function(project, workflow = NULL) {
   rownames(out) <- NULL
   out
 }
+
+#' Progress of a run, rebuilt from its Nextflow log
+#'
+#' One row per process in the order Nextflow started them, with task counts
+#' like the progress block Nextflow prints. Works for app and job runs alike.
+#' @return data.frame (process, submitted, done, failed, cached, running) with
+#'   attributes `updated` (log modification time) and `ended` (the log records
+#'   Nextflow's end), or NULL when unreadable.
+#' @noRd
+run_progress <- function(log) {
+  x <- tryCatch(suppressWarnings(readLines(log, warn = FALSE)), error = function(e) NULL)
+  if (is.null(x)) return(NULL)
+  grab <- function(re) {
+    m <- regmatches(x, regexec(re, x))
+    vapply(m[lengths(m) > 0], `[`, "", 2)
+  }
+  untag <- function(n) sub(" \\(.*\\)$", "", n)
+  procs <- unique(grab("Starting process > (\\S+)"))
+  sub_n <- untag(grab("(?:Submitted|Re-submitted) process > (.+)$"))
+  cached <- untag(grab("Cached process > (.+)$"))
+  m <- regmatches(x, regexec("Task completed > TaskHandler\\[.*?name: (.+?); status: \\w+; exit: ([^;]+);", x))
+  m <- m[lengths(m) > 0]
+  done_n <- untag(vapply(m, `[`, "", 2))
+  ok <- vapply(m, `[`, "", 3) == "0"
+  procs <- unique(c(procs, sub_n, cached, done_n))
+  cnt <- function(v) vapply(procs, function(p) sum(v == p), integer(1), USE.NAMES = FALSE)
+  out <- data.frame(process = procs, submitted = cnt(sub_n), done = cnt(done_n[ok]),
+                    failed = cnt(done_n[!ok]), cached = cnt(cached))
+  out$running <- pmax(out$submitted - out$done - out$failed, 0L)
+  attr(out, "updated") <- file.mtime(log)
+  attr(out, "ended") <- any(grepl(
+    "Execution complete -- Goodbye|Session aborted -- Cause:|\\] ERROR +nextflow\\.cli\\.Launcher - ", x))
+  out
+}
+
+#' Plain-text progress block for a run, in the style of Nextflow's own
+#' @noRd
+run_progress_text <- function(log, now = Sys.time(), stale = 3600) {
+  p <- run_progress(log)
+  if (is.null(p)) return("The Nextflow log could not be read.")
+  upd <- attr(p, "updated")
+  idle <- as.numeric(difftime(now, upd, units = "secs"))
+  state <- if (isTRUE(attr(p, "ended"))) {
+    paste("Nextflow has finished, but the run report is not written yet. It is written",
+          "once the run's exit status is logged; reopen Run Reports in a moment.")
+  } else if (idle > stale) {
+    paste("No log update for", fmt_duration(idle), "and no finish recorded:",
+          "Nextflow may have stopped (killed, out of time, or the job was cancelled).")
+  } else if (!nrow(p) || sum(p$submitted + p$cached) == 0) {
+    "Nextflow is running, but no samples have started processing yet."
+  } else {
+    sprintf("Running. Tasks in progress: %d.", sum(p$running))
+  }
+  head <- c(state, sprintf("Last log update: %s (%s ago)", format(upd, "%Y-%m-%d %H:%M:%S"),
+                           fmt_duration(idle)), "")
+  if (!nrow(p)) return(paste(head, collapse = "\n"))
+  total <- p$submitted + p$cached
+  fin <- p$done + p$failed + p$cached
+  pct <- ifelse(total > 0, floor(100 * fin / total), NA)
+  stat <- ifelse(total == 0, "-", paste0(
+    sprintf("%d of %d", fin, total),
+    ifelse(p$cached > 0, sprintf(", cached: %d", p$cached), ""),
+    ifelse(p$failed > 0, sprintf(", failed: %d", p$failed), ""),
+    ifelse(p$running > 0, sprintf(", running: %d", p$running), "")))
+  w <- max(nchar(p$process))
+  rows <- sprintf("[%s] %-*s | %s", ifelse(is.na(pct), "    ", sprintf("%3d%%", pct)), w, p$process, stat)
+  paste(c(head, rows), collapse = "\n")
+}
