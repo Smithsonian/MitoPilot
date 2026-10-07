@@ -1202,10 +1202,8 @@ export_server <- function(id) {
     nmnh_show_report <- function() {
       take_snap()
       r <- nmnh_res()
-      fixed <- r[r$ok & r$fixed, , drop = FALSE]
-      ids <- r$ID[!r$ok | r$not_nmnh]
-      # nothing to fix: list every sample so its values can still be revised
-      nmnh_report_ids(if (length(ids)) ids else r$ID)
+      nmnh_report_ids(r$ID[!r$ok | r$not_nmnh])
+      nmnh_ready_ids(r$ID[r$ok & !r$not_nmnh])
       nmnh_typed(list())
       modalDialog(
         title = mp_modal_title("NMNH voucher report", close = FALSE),
@@ -1226,20 +1224,12 @@ export_server <- function(id) {
             "fields ticked for export. ", actionLink(ns("nmnh_choose_fields"), "Choose fields"),
             tags$br(), "Not NMNH: ", actionLink(ns("nmnh_flag_all"), "Select all"), " | ",
             actionLink(ns("nmnh_flag_none"), "Clear all")),
+        div(class = "mp-nmnh-table-title",
+            sprintf("Need attention or marked Not NMNH (%d)", length(nmnh_report_ids()))),
         div(class = "mp-nmnh-scroll", reactable::reactableOutput(ns("nmnh_table"))),
-        if (nrow(fixed)) {
-          tags$details(
-            tags$summary(sprintf("Auto-fixed (%d)", nrow(fixed))),
-            div(class = "mp-nmnh-scroll", reactable::reactable(
-              data.frame(ID = fixed$ID,
-                         specimen_voucher = fixed$nmnh_specimen_voucher,
-                         voucher_note = mapply(nmnh_note, fixed$voucher_source, fixed$voucher_note),
-                         voucherURI = fixed$nmnh_voucherURI,
-                         uri_note = mapply(nmnh_note, fixed$uri_source, fixed$uri_note)),
-              compact = TRUE, pagination = FALSE, wrap = TRUE
-            ))
-          )
-        },
+        div(class = "mp-nmnh-table-title",
+            sprintf("Pass the NMNH check (%d)", length(nmnh_ready_ids()))),
+        div(class = "mp-nmnh-scroll", reactable::reactableOutput(ns("nmnh_ready_table"))),
         footer = mp_footer(
           primary = actionButton(ns("nmnh_back"), "Back to export"), dismiss = NULL,
           extra = div(
@@ -1280,11 +1270,14 @@ export_server <- function(id) {
     # Rows shown in the report: the problems found when it opened, kept after a
     # fix so the entry and its check stay visible. Invalid entries are not saved.
     nmnh_report_ids <- reactiveVal(character(0))
+    nmnh_ready_ids <- reactiveVal(character(0))
     nmnh_typed <- reactiveVal(list())
     nmnh_ver <- reactiveVal(0L)
-    output$nmnh_table <- reactable::renderReactable({
+    # One editable table: problem rows, or rows that pass (with an Auto-fixed column)
+    nmnh_report_table <- function(ids, ready = FALSE) {
       r <- req(nmnh_res())
-      r <- r[r$ID %in% nmnh_report_ids(), , drop = FALSE]
+      r <- r[match(ids, r$ID), , drop = FALSE]
+      r <- r[!is.na(r$ID), , drop = FALSE]
       typed <- nmnh_typed()
       nmnh_ver()
       choices <- nmnh_field_choices(session$userData$con)
@@ -1308,16 +1301,23 @@ export_server <- function(id) {
       # html = TRUE: reactable drops inline handlers on R tags
       cell <- function(field) function(value, index) {
         bad <- typed[[paste(r$ID[index], field)]]
-        note <- nmnh_note(r[[paste0(field, "_source")]][index], r[[paste0(field, "_note")]][index])
+        src <- r[[paste0(field, "_source")]][index]
+        raw <- r[[paste0(field, "_note")]][index] %|NA|% ""
+        # short line: verdict and source; the full notes sit behind a help icon
+        short <- if (is.na(src)) "" else paste0(" (", nmnh_source_short(src), ")")
+        head1 <- strsplit(raw, "; ", fixed = TRUE)[[1]][1] %|NA|% "problem"
+        extra <- nzchar(raw) && (raw != head1 || isTRUE(r[[paste0(field, "_ok")]][index]) ||
+          isTRUE(r$not_nmnh[index]))
+        full <- if (is.null(bad) && extra) nmnh_note(src, raw) else ""
         st <- if (isTRUE(r$not_nmnh[index]) && is.null(bad)) {
           if (is.na(value)) list("muted", "circle-minus", "Missing: modifier left out")
-          else list("muted", "circle-minus", if (nzchar(note)) paste0("Not checked (", note, ")") else "Not checked")
+          else list("muted", "circle-minus", paste0("Not checked", short))
         } else if (!is.null(bad)) {
           list("danger", "circle-xmark", bad$note)
         } else if (isTRUE(r[[paste0(field, "_ok")]][index])) {
-          list("success", "circle-check", if (nzchar(note)) paste0("Valid (", note, ")") else "Valid")
+          list("success", "circle-check", paste0("Valid", short))
         } else {
-          list("danger", "circle-xmark", note)
+          list("danger", "circle-xmark", paste0(toupper(substr(head1, 1, 1)), substring(head1, 2), short))
         }
         as.character(tagList(
           tags$input(
@@ -1329,15 +1329,19 @@ export_server <- function(id) {
           pick(field, index),
           div(class = if (st[[1]] == "muted") "text-muted" else paste0("mp-fg-", st[[1]]),
               style = "font-size: var(--mp-fs-meta); white-space: normal;",
-              icon(st[[2]]), " ", st[[3]])
+              icon(st[[2]]), " ", st[[3]],
+              if (nzchar(full)) mp_help_tip(htmltools::htmlEscape(full), label = paste(field, r$ID[index])))
         ))
       }
+      d <- data.frame(ID = r$ID, not_nmnh = r$not_nmnh, specimen_voucher = r$nmnh_specimen_voucher,
+                      voucherURI = r$nmnh_voucherURI)
+      if (ready) d$auto_fixed <- ifelse(r$fixed, "Yes", "")
       reactable::reactable(
-        data.frame(ID = r$ID, not_nmnh = r$not_nmnh, specimen_voucher = r$nmnh_specimen_voucher,
-                   voucherURI = r$nmnh_voucherURI),
+        d,
         compact = TRUE, pagination = FALSE,
-        language = reactable::reactableLang(noData = "No NMNH problems."),
-        columns = list(
+        language = reactable::reactableLang(
+          noData = if (ready) "No samples pass the NMNH check yet." else "No NMNH problems."),
+        columns = c(list(
           ID = reactable::colDef(width = 120, html = TRUE, cell = function(value) {
             as.character(tags$a(
               href = "#", title = "View this sample's metadata",
@@ -1356,9 +1360,14 @@ export_server <- function(id) {
           ),
           specimen_voucher = reactable::colDef(minWidth = 280, html = TRUE, cell = cell("voucher")),
           voucherURI = reactable::colDef(minWidth = 280, html = TRUE, cell = cell("uri"))
-        )
+        ), if (ready) list(auto_fixed = reactable::colDef(
+          name = "Auto-fixed", width = 100, align = "center",
+          header = rt_header("Auto-fixed", "MitoPilot corrected the format of a value, or replaced a tissue link with its specimen. The ? under a cell says what changed.")
+        )))
       )
-    })
+    }
+    output$nmnh_table <- reactable::renderReactable(nmnh_report_table(nmnh_report_ids()))
+    output$nmnh_ready_table <- reactable::renderReactable(nmnh_report_table(nmnh_ready_ids(), ready = TRUE))
     output$nmnh_copy <- renderUI({
       r <- nmnh_problems()
       d <- data.frame(ID = r$ID, specimen_voucher = r$nmnh_specimen_voucher,
