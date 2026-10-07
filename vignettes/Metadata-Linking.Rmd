@@ -39,12 +39,9 @@ fetch_ncbi("my_project", link_sources = TRUE)   # this fetch only
 ```
 
 In the app, tick **Follow links between databases** next to **Fetch** in the
-sample metadata viewer. Setup and the checkbox save the setting in the
-project. `fetch_*()` follows it unless you pass `link_sources = TRUE` or
-`FALSE`; `add_samples()` and `update_sample_metadata()` follow it, and
-`link_sources = TRUE` turns linking on for that call.
+sample metadata viewer. 
 
-## What MitoPilot follows
+## How MitoPilot links database records
 
 ![How MitoPilot links records across databases. Each arrow reads the record at its tail and fills in the ID at its head.](figures/link_overview.svg)
 
@@ -59,14 +56,13 @@ project. `fetch_*()` follows it unless you pass `link_sources = TRUE` or
 
 Rules that keep linking safe:
 
-- **Your IDs always win.** MitoPilot only fills a database the sample has no
-  ID for. If a record points elsewhere, yours is kept and the viewer notes
+- **Your IDs always win.** MitoPilot only fills a database when the sample has no
+  ID for it. If a record points elsewhere, yours is kept and the viewer notes
   "... record links to ...; kept your ID ...".
 - **The first link wins.** Records are read in the order GEOME, GBIF, NCBI. If
-  two name different records in the third database, the first is linked and
+  two databases link to different records in the third database, the first is linked and
   the other is noted.
 - **Each database is fetched at most once per sample**, so links cannot loop.
-- **A failed linked fetch never fails the fetch that found it.**
 - **Every linked ID says where it came from**, for example "Found through
   NCBI BioSample voucherURI" in the viewer.
 
@@ -89,16 +85,15 @@ filters the hits, and links only when exactly one specimen is left:
 ![How a voucher is matched to one GBIF record](figures/link_gbif_voucher.svg)
 
 - **The species must match.** One catalog number can belong to many
-  specimens: a museum lot can hold dozens of species, and `USNM 419933` exists
-  in three collections.
+  specimens.
 - **The collection code narrows, but does not reject.** A single match under
   another code is kept, since GenBank and GBIF often name collections
   differently.
 - **Copies are skipped.** GBIF occurrences copied from GenBank or the Barcode
   of Life are ignored; they are not museum records.
 
-Vouchers without an institution code, or specimens the museum has not
-published to GBIF, cannot be matched.
+Vouchers without an institution code or specimens the museum has not
+published to GBIF cannot be matched.
 
 ## Why is my sample not linked?
 

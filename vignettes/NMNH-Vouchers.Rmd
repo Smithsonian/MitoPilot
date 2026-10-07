@@ -18,11 +18,11 @@ vignette: >
 strong { font-weight: bold; }
 </style>
 
-This page is for GenBank submissions of Smithsonian National Museum of Natural
-History (NMNH) specimens. Other users can skip it.
+This page is for GenBank submission containing specimens from the Smithsonian National Museum of Natural
+History (NMNH). Other users can skip it.
 
 NMNH asks that each GenBank record from one of its specimens carry the
-specimen voucher and the specimen's EZID, for example:
+specimen voucher and the specimen's EZID in the following format:
 
 ```
 [specimen_voucher=USNM:FISH:487075] [voucherURI=http://n2t.net/ark:/65665/30f303846-9d23-4069-881e-e43ff718ef9f]
@@ -38,9 +38,9 @@ source modifiers.
 
 1. **Turn it on.** In **Export Data**, tick **NMNH user**. MitoPilot adds
    `[specimen_voucher={nmnh_specimen_voucher}] [voucherURI={nmnh_voucherURI}]`
-   to the header template (and to the gene header when genes are exported). If
+   to the FASTA header templates. If
    the template already has either modifier, it asks before replacing it. The
-   switch is remembered per project.
+   switch is remembered when the header template is saved.
 2. **Check the status.** The NMNH box shows how many samples need attention,
    or "All N samples ready".
 3. **Review and fix** samples in the voucher report (below).
@@ -53,10 +53,10 @@ source modifiers.
 For each sample, MitoPilot takes the first valid value from, in order:
 
 1. your mapping file (pick the columns under **Optional: take these from
-   mapping file columns**),
-2. the linked GBIF record,
-3. the NCBI BioSample,
-4. the GEOME record.
+   mapping file columns**)
+2. the linked GBIF record
+3. the NCBI BioSample
+4. the GEOME record
 
 A voucher with no EZID is looked up in GBIF to find the EZID, and an EZID with
 no voucher is looked up to find the voucher. Linking the samples first (see
@@ -75,10 +75,9 @@ values.
 ## The voucher report
 
 **Review and fix** (or **Review NMNH values**) opens the report. It has two
-tables: **Need attention or marked Not NMNH**, and **Pass the NMNH check**. Each
-cell shows the value, where it came from, and the result; click its **?** for
-details. The **Auto-fixed** column marks samples whose values MitoPilot
-corrected.
+tables: **Need attention...**, and **Pass the NMNH check**. Each
+cell shows the value, where it came from, and the result.
+The **Auto-fixed** column marks samples whose values MitoPilot corrected.
 
 To fix a sample:
 
@@ -87,11 +86,11 @@ To fix a sample:
   back to the automatic value.
 - **Pick a field** under the cell to take the value from another mapping-file
   column or metadata field, or **None** to leave the modifier out.
-- **Tick Not NMNH** for samples that are not NMNH specimens. Their values are
+- **Tick "Not NMNH"** for samples that are not NMNH specimens. Their values are
   used as found, without NMNH checks.
 - **Click the sample ID** to open its metadata; **Back to voucher report**
   returns.
-- **For many samples**, use **Download CSV for bulk edit**, edit the file, then
+- To easily edit many samples, use **Download CSV for bulk edit**, edit the file, then
   **Upload edited CSV**.
 
 ![NMNH voucher report with a typed voucher, missing values, and a sample marked Not NMNH](figures/nmnh_voucher_report.png)

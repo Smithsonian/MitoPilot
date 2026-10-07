@@ -24,31 +24,30 @@ strong { font-weight: bold; }
 knitr::opts_chunk$set(eval = FALSE)
 ```
 
-MitoPilot can link each sample to its records in three public databases, show
+MitoPilot can optionally link each sample to its records in three public databases, show
 them in the app, flag where they disagree, and use their values in your
-GenBank FASTA headers. Linking is optional; projects without it work as before.
+GenBank FASTA headers. 
 
 | Database | What it holds | Identifier you supply |
 |---|---|---|
-| [GEOME](https://geome-db.org) | Specimen, tissue, and collecting-event records from field projects | A **BCID**, such as `ark:/21547/CXu2MBIO1000.1` |
-| [GBIF](https://www.gbif.org) | Museum and collection specimen records ("occurrences") | A **gbifID**, such as `6186461308`, or a Smithsonian **EZID** |
-| [NCBI BioSample](https://www.ncbi.nlm.nih.gov/biosample) | The biological material behind GenBank and SRA data | A **BioSample** (`SAMN29555051`) or **SRA** accession (`SRR21844202`) |
+| [GEOME](https://geome-db.org) | Specimen, tissue, and collecting-event records from field projects | **BCID**, such as `ark:/21547/CXu2MBIO1000.1` |
+| [GBIF](https://www.gbif.org) | Museum and collection specimen records ("occurrences") | **gbifID**, such as `6186461308`, or Smithsonian **EZID** |
+| [NCBI BioSample](https://www.ncbi.nlm.nih.gov/biosample) | The biological material behind GenBank and SRA data | **BioSample** (`SAMN29555051`) or **SRA** accession (`SRR21844202`) |
 
 MitoPilot never merges values or picks one source over another. Each source
-keeps its own fields, and you decide which ones go into your headers. Records
-are copies taken when you fetch them; fetch again to pick up later changes.
+keeps its own fields, and you decide which ones go into your FASTA headers. Records
+are not live, so if the remote database changes, you need to rerun the fetch in MitoPilot.
 
 <div class="alert alert-warning">
 <strong>Public records only.</strong> MitoPilot reads public GEOME records,
-GBIF occurrences, and NCBI BioSamples. Private GEOME projects are not supported.
+GBIF occurrences, and NCBI BioSamples. Private GEOME or NCBI projects are not supported.
 </div>
 
 Related pages:
 
 - [Linking records across databases](Metadata-Linking.html): fill in the other
   databases from one ID.
-- [NMNH voucher submissions](NMNH-Vouchers.html): the specimen voucher and EZID
-  NMNH requires on GenBank records.
+- [NMNH voucher submissions](NMNH-Vouchers.html): NMNH metadata requirements for GenBank records.
 - [Metadata field reference](Metadata-Reference.html): every export field, the
   column names MitoPilot recognizes, and fetch messages.
 
@@ -67,17 +66,15 @@ Related pages:
 
 | Task | In R | In the app |
 |---|---|---|
-| Link IDs at setup | `new_project(mapping_geome =, mapping_gbif =, mapping_ncbi =)` | |
-| Add or change IDs | `update_sample_metadata()`, or `fetch_*(ids =, gbifs = / bcids = / ncbi_ids =)` | Click a sample's Metadata icon, edit the ID, **Fetch** |
-| Refresh records | `fetch_geome()`, `fetch_gbif()`, `fetch_ncbi()` | **Refresh all** in the viewer |
-| Fill in other databases | `link_sources = TRUE` | **Follow links between databases** |
+| Link IDs at setup | `new_project(mapping_geome =, mapping_gbif =, mapping_ncbi =)` | NA |
+| Add or change IDs | `update_sample_metadata()`, or `fetch_*(ids =, gbifs = / bcids = / ncbi_ids =)` | Click an icon in Metadata column to open the metadata selector, edit the ID, **Fetch** |
+| Refresh records | `fetch_geome()`, `fetch_gbif()`, `fetch_ncbi()` | **Refresh all** in metadata selector |
+| Fill in other databases | `link_sources = TRUE` | **Follow links between databases** in metadata selector |
 | Pick which mapping-file columns are compared | `set_metadata_columns()` | **Mapfile columns...** on the Compare tab |
-| Use fields in headers | `export_files(fasta_header = ...)` after ticking fields for export | **Metadata** button, then Export Data |
-| Remove fetched data | `remove_metadata()` | **Remove fetched data...** in the viewer |
+| Use fields in FASTA headers | NA| **Metadata** button, then toggle **Export Data** |
+| Remove fetched data | `remove_metadata()` | **Remove fetched data...** in metadata selector |
 
 ## Finding the identifiers
-
-Paste any of the forms below; MitoPilot trims links to the bare ID.
 
 - **GEOME BCID.** Open a record on [geome-db.org](https://geome-db.org) and copy
   its identifier, which starts with `ark:/`. Use the most specific record that
@@ -89,15 +86,15 @@ Paste any of the forms below; MitoPilot trims links to the bare ID.
   identifier starting with `ark:/65665/`, in place of a gbifID. MitoPilot finds
   the matching GBIF occurrence, so the specimen must be on GBIF. EZIDs are more
   stable than gbifIDs. Links from `n2t.net` or `collections.nmnh.si.edu` work,
-  with or without dashes.
+  with or without dashes. Ask your 
 - **BioSample or SRA accession.** Copy the BioSample accession from
-  [NCBI BioSample](https://www.ncbi.nlm.nih.gov/biosample), or use the SRA
-  accession of your reads (`SRR`, `ERR`, `DRR`, `SRX`, or `SRS`). For an SRA
-  accession, MitoPilot finds its BioSample and also stores the run, experiment,
+  [NCBI BioSample](https://www.ncbi.nlm.nih.gov/biosample), or use the [NCBI SRA](https://www.ncbi.nlm.nih.gov/sra)
+  accession of your reads . For an SRA
+  accession, MitoPilot finds its associated BioSample and also stores the run, experiment,
   study, platform, and library.
 
 <div class="alert alert-note">
-<strong>gbifIDs can change.</strong> When a publisher changes how it identifies
+<strong>gbifIDs are not persistent</strong> When a publisher changes how it identifies
 a specimen, GBIF may give it a new gbifID. If an ID stops working, MitoPilot
 keeps the data it fetched before and marks the fetch as failed. Look the
 specimen up again on gbif.org and paste the new ID.
@@ -123,8 +120,7 @@ new_project(path = "my_project", mapping_fn = "mapping.csv",
             data_path = "reads/")
 ```
 
-- The columns are stored as `GEOME_BCID`, `GBIF_ID`, and `BioSample`. If yours
-  already have those names, leave out the `mapping_*` arguments.
+- The columns are stored as `GEOME_BCID`, `GBIF_ID`, and `BioSample`.
 - Blank cells are fine: those samples have no link.
 - Fetching needs internet access on the machine running R. Offline, pass
   `fetch_geome = FALSE`, `fetch_gbif = FALSE`, and `fetch_ncbi = FALSE`, and
@@ -145,10 +141,10 @@ fetch_gbif("my_project")                      # refresh every gbifID
 fetch_gbif("my_project", ids = "FISH02")      # refresh one sample
 fetch_gbif("my_project", ids = c("FISH01", "FISH02"),
            gbifs = c("2336663130", "6186461308"))   # set new IDs, then fetch
-fetch_ncbi("my_project", ids = "FISH03", ncbi_ids = "SAMN29555051")
+fetch_ncbi("my_project", ids = "FISH03", ncbi_ids = "SAMN29555051") # same idea, but for NCBI
+fetch_geome("my_project", ids = "FISH04", bcids = "ark:/21547/CXu2MBIO1000.1")  # same idea, but for GEOME
 ```
 
-`fetch_geome()` takes `bcids` in the same way. A blank value removes the link.
 When some fetches fail, the rest still finish and one warning lists each failed
 sample with the reason. A failed refresh keeps the data fetched before; changing
 to a different ID clears the old record right away. The
@@ -169,11 +165,11 @@ The Assemble, Annotate, and Export tables have a **Metadata** column after
 
 | Icon | Meaning |
 |---|---|
+| "+" | No IDs. Click it to add one. |
 | GEOME "G", GBIF leaf, NCBI helix | The record was fetched. |
 | Faded logo | The ID is set but not fetched yet. |
 | Faded logo with a warning triangle | The fetch failed. Hover to see why. |
 | Orange flag | The sources disagree on at least one item (see [Comparing sources](#comparing-sources)). |
-| Faint plus | No IDs. Click it to add one. |
 
 ![Assemble table with the Metadata column showing fetched, failed, conflict, and empty samples](figures/specimen_column.png)
 
@@ -184,15 +180,12 @@ The **Metadata** button next to each table's **Columns** picker opens the
 sample, with an example value and a sample count (for example `12/20`). Each
 row has two ticks:
 
-- **Show** adds the field as a column in all three tables.
-- **Export** makes the field usable in export header templates and writes it
+- **Show** adds the field as a column in all three MitoPilot tables.
+- **Export** makes the field usable in export FASTA header templates and writes it
   to the sample summary CSV.
 
-Mapping-file columns start with **Show** ticked and are always available at
-export. GEOME, GBIF, and NCBI fields start unticked. The filter buttons
-(**Map file**, **GEOME**, **GBIF**, **NCBI**, **GenBank-ready**, **Ticked
-only**) and the search box narrow the list; the box in a column header ticks
-every row in view. Click **Save** to keep your choices in the project.
+Mapping-file columns are always available at
+export. Click **Save** to keep your choices in the project.
 
 ![Metadata fields window with Show and Export ticks](figures/specimen_fields.png)
 
@@ -201,13 +194,13 @@ every row in view. Click **Save** to keep your choices in the project.
 Click a sample's Metadata icon to open the viewer. It has a tab for each
 database and a **Compare** tab. Here you can:
 
-- edit an ID and click **Fetch** (clear the box to remove the link),
-- click **Refresh all** to fetch every sample again,
+- edit an ID and click **Fetch** (clear the box to remove the link)
+- click **Refresh all** to fetch every sample again
 - filter fields by name, copy any value, or **Export CSV** to save all of a
-  sample's metadata.
+  sample's metadata
 
-The sample list on the left marks samples that "(failed)" or have a
-"(conflict)".
+The sample list on the left marks samples that failed to fetch or have a
+conflict between the different metadata sources.
 
 ![Sample metadata viewer, GBIF tab, with the occurrence issues shown as badges](figures/specimen_viewer_gbif.png)
 
@@ -215,7 +208,7 @@ The sample list on the left marks samples that "(failed)" or have a
 
 The **Compare** tab puts the values from your mapping file, GEOME, GBIF, and
 NCBI side by side for coordinates, collection date, country, locality,
-voucher, collector, sex, life stage, and taxon:
+voucher, collector, sex, life stage, and taxon.
 
 | Status | Meaning |
 |---|---|
@@ -241,36 +234,19 @@ set_metadata_columns("my_project", sex = "")       # do not compare sex
 
 ## Using metadata fields at export
 
-Fetched values reach your files only through fields you tick for **Export**
-(see [Showing metadata in the tables](#showing-metadata-in-the-tables)). Each
+For a fetched value to be included in the FASTA header, you must tick **Export** in the 
+metadata browser (see [Showing metadata in the tables](#showing-metadata-in-the-tables)). Each
 source offers **GenBank-ready** fields that are already formatted as GenBank
-FASTA source modifiers, the `[name=value]` tags in a header such as
+FASTA source modifiers: the `[name=value]` tags in a header such as
 `[lat_lon=17.48 S 149.90 W]`:
 
-| Modifier | GEOME | GBIF | NCBI |
-|---|---|---|---|
-| `lat_lon` | `geome_lat_lon` | `gbif_lat_lon` | `ncbi_lat_lon` |
-| `collection_date` | `geome_collection_date` | `gbif_collection_date` | `ncbi_collection_date` |
-| `geo_loc_name` | `geome_geo_loc_name` | `gbif_geo_loc_name` | `ncbi_geo_loc_name` |
-| `specimen_voucher` | `geome_specimen_voucher` | `gbif_specimen_voucher` | `ncbi_specimen_voucher` |
-
-Collector, identifier, sex, life stage, tissue type, BioSample, and BioProject
-fields, and every raw field, are listed in the
-[field reference](Metadata-Reference.html).
-
 In the **Export Data** window, the **Available metadata** panel lists every
-field you can use. Click one to insert it into the header box you last
-clicked; a GenBank-ready field inserts the whole modifier, such as
+field you can use. Click one to insert it into the FASTA header box.
+A GenBank-ready field inserts the whole modifier, such as
 `[lat_lon={gbif_lat_lon}]`. **Choose fields** next to a source opens the
-Metadata fields window and returns to Export Data when you close it.
+Metadata fields window so you can quikcly enable more metadata fields for export.
 
 ![Export Data window with grouped column chips](figures/export_tokens.png)
-
-A template using GBIF fields:
-
-```
-{seqid} [organism={Taxon}] [mgcode={genetic_code}] [location=mitochondrion] [lat_lon={gbif_lat_lon}] [collection_date={gbif_collection_date}] [geo_loc_name={gbif_geo_loc_name}] [specimen_voucher={gbif_specimen_voucher}] {Taxon} mitochondrion, {completeness}
-```
 
 - **Take a record's values from one source where you can.** Mixing sources
   can combine coordinates and dates from different events. If you cite a
@@ -284,12 +260,10 @@ A template using GBIF fields:
   States of America`, where GenBank expects `USA`), and GBIF may have adjusted
   or generalized coordinates. See the
   [GBIF notes](Metadata-Reference.html#gbif-notes).
-- **From R**, `export_files(fasta_header = ...)` uses the same template syntax
-  and the fields ticked for export.
 
 When you click **Export**, MitoPilot checks the items your templates use. If
-any sample in the export group has a **conflict** on one of them, a "Sample
-metadata disagrees" warning lists each sample, item, and value. Click **Export
+any sample in the export group has a metadata **conflict**, a warning 
+lists each sample, item, and value. Click **Export
 anyway** or **Cancel**.
 
 ![Export warning listing a country conflict](figures/specimen_export_warning.png)
