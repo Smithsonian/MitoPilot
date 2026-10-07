@@ -92,10 +92,34 @@ test_that(".ncbi_get sends tool and api_key and spaces requests", {
     seen[[length(seen) + 1L]] <<- list(url = req$url, t = Sys.time())
     httr2::response(status_code = 200, body = charToRaw("<x/>"))
   }, .package = "httr2")
-  withr::local_envvar(ENTREZ_KEY = "abc")
+  withr::local_envvar(ENTREZ_KEY = "abc", NCBI_API_KEY = "")
   .ncbi_get("efetch", list(db = "biosample", id = "1"))
   .ncbi_get("efetch", list(db = "biosample", id = "2"))
   expect_match(seen[[1]]$url, "tool=MitoPilot", fixed = TRUE)
   expect_match(seen[[1]]$url, "api_key=abc", fixed = TRUE)
   expect_gte(as.numeric(difftime(seen[[2]]$t, seen[[1]]$t, units = "secs")), 0.1)
+})
+
+test_that(".ncbi_api_key prefers project key, then NCBI_API_KEY, then ENTREZ_KEY", {
+  withr::defer(.ncbi_env$project_key <- NULL)
+  withr::local_envvar(NCBI_API_KEY = "nak", ENTREZ_KEY = "ek")
+  .ncbi_env$project_key <- "proj"
+  expect_equal(.ncbi_api_key(), "proj")
+  .ncbi_env$project_key <- NULL
+  expect_equal(.ncbi_api_key(), "nak")
+  withr::local_envvar(NCBI_API_KEY = "")
+  expect_equal(.ncbi_api_key(), "ek")
+})
+
+test_that(".ncbi_project_key reads ncbi_api_key from the project .config", {
+  d <- withr::local_tempdir()
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.path(d, ".sqlite"))
+  on.exit(DBI::dbDisconnect(con))
+  expect_null(.ncbi_project_key(con))
+  writeLines("    ncbi_api_key = 'abc123'       // comment", file.path(d, ".config"))
+  expect_equal(.ncbi_project_key(con), "abc123")
+  writeLines("    ncbi_api_key = ''", file.path(d, ".config"))
+  expect_null(.ncbi_project_key(con))
+  writeLines("    ncbi_api_key = '<<NCBI_API_KEY>>'", file.path(d, ".config"))
+  expect_null(.ncbi_project_key(con))
 })

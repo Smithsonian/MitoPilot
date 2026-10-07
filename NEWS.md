@@ -32,6 +32,7 @@ Released 2026-10-07. Container: `macguigand/mitopilot:1.5.9`
 
 ## Bug Fixes
 
+- NCBI metadata fetches ignored the project's `ncbi_api_key` and the `NCBI_API_KEY` environment variable, reading only `ENTREZ_KEY`, so they ran at the slower keyless rate. They now use the same key as BLAST and reference fetches.
 - Opening the app on a project with no extra mapping-file columns and no fetched GEOME, GBIF, or NCBI metadata (for example a fresh test project) failed with "replacement has 1 row, data has 0".
 
 **Note**

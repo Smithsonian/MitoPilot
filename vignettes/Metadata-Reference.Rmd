@@ -129,6 +129,6 @@ fetch.
 | `SRA accession ... has no linked BioSample` | Supply the BioSample accession instead. |
 | `'x' is not a BioSample or SRA accession (...)` | The value is not a recognized NCBI accession. |
 | `could not reach GEOME / GBIF / NCBI (...)` | No connection. Try again later with `fetch_*()` or **Refresh all**. |
-| `GEOME / GBIF / NCBI returned HTTP ...` | Any other server error, often a busy server. Try again later; for NCBI, set `ENTREZ_KEY`. |
+| `GEOME / GBIF / NCBI returned HTTP ...` | Any other server error, often a busy server. Try again later; for NCBI, set an API key (`ncbi_api_key` at setup). |
 | `N possible GBIF matches for ...; not linked` | Linking found several GBIF specimens for a voucher. Paste the right gbifID. |
 | `... record links to ...; kept your ID ...` | A fetched record names a different ID than yours. Check which is right. |
