@@ -1306,9 +1306,13 @@ export_server <- function(id) {
         # short line: verdict and source; the full notes sit behind a help icon
         short <- if (is.na(src)) "" else paste0(" (", nmnh_source_short(src), ")")
         head1 <- strsplit(raw, "; ", fixed = TRUE)[[1]][1] %|NA|% "problem"
-        extra <- nzchar(raw) && (raw != head1 || isTRUE(r[[paste0(field, "_ok")]][index]) ||
-          isTRUE(r$not_nmnh[index]))
-        full <- if (is.null(bad) && extra) nmnh_note(src, raw) else ""
+        full <- if (is.null(bad)) nmnh_note(src, raw) else ""
+        if (is.null(bad) && (identical(raw, "missing") || !nzchar(full))) {
+          full <- "No value found in the mapping file, GBIF, NCBI, or GEOME."
+        }
+        if (identical(r[[paste0(field, "_field")]][index], "none")) {
+          full <- "Field set to None: no value, so this modifier is left out of the header."
+        }
         st <- if (isTRUE(r$not_nmnh[index]) && is.null(bad)) {
           if (is.na(value)) list("muted", "circle-minus", "Missing: modifier left out")
           else list("muted", "circle-minus", paste0("Not checked", short))
