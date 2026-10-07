@@ -248,7 +248,8 @@ templates (`"slurm"`, `"sge"`, `"pbs"`, `"lsf"`, `"awsbatch"`), a site profile
 
 **`ncbi_api_key`** raises your NCBI request limits. Worth setting even
 though the BLAST search itself is local, because MitoPilot fetches
-annotations and taxonomic lineage for each BLAST hit directly from NCBI. Get an API key from
+annotations and taxonomic lineage for each BLAST hit directly from NCBI. Sample
+metadata fetches use it too. Get an API key from
 [NCBI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/).
 
 #### Any other pipeline parameter

@@ -19,8 +19,25 @@ ncbi_normalize_id <- function(x) {
 
 .ncbi_is_sra <- function(x) !is.na(x) & grepl("^[SED]R[RXS][0-9]+$", x)
 
+# Project ncbi_api_key, else NCBI_API_KEY, else ENTREZ_KEY
+.ncbi_api_key <- function() {
+  k <- .ncbi_env$project_key %||% ""
+  if (!nzchar(k)) k <- Sys.getenv("NCBI_API_KEY")
+  if (!nzchar(k)) k <- Sys.getenv("ENTREZ_KEY")
+  k
+}
+
+.ncbi_project_key <- function(con) {
+  db <- tryCatch(con@dbname, error = function(e) "")
+  if (!nzchar(db) || !file.exists(db)) return(NULL)
+  conf <- file.path(dirname(db), ".config")
+  if (!file.exists(conf)) return(NULL)
+  k <- config_get_param(readLines(conf, warn = FALSE), "ncbi_api_key")
+  if (!is.null(k) && !startsWith(k, "<<")) k
+}
+
 .ncbi_get <- function(endpoint, query) {
-  key <- Sys.getenv("ENTREZ_KEY")
+  key <- .ncbi_api_key()
   gap <- if (nzchar(key)) 0.11 else 0.34
   wait <- gap - (as.numeric(Sys.time()) - (.ncbi_env$last %||% 0))
   if (wait > 0) Sys.sleep(wait)

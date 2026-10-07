@@ -151,10 +151,11 @@ to a different ID clears the old record right away. The
 [fetch messages](Metadata-Reference.html#fetch-messages) table explains each
 reason.
 
-NCBI allows three requests per second. For larger projects, get a free
-[NCBI API key](https://www.ncbi.nlm.nih.gov/books/NBK25497/) and set it as
-`ENTREZ_KEY` (for example `ENTREZ_KEY=your_key` in `.Renviron`, or
-`Sys.setenv(ENTREZ_KEY = "your_key")`) to allow ten.
+NCBI allows three requests per second, or ten with a free
+[NCBI API key](https://www.ncbi.nlm.nih.gov/books/NBK25497/). Metadata fetches
+use the same key as the rest of the project: the `ncbi_api_key` you set in
+`new_project()` (see [Running Your Own Project](Your-Own-Project.html)), or
+else the `NCBI_API_KEY` environment variable.
 
 ## Viewing records in the app
 

@@ -110,6 +110,9 @@ META_SOURCES <- list(
 .meta_fetch_into <- function(con, source, ids, refs, cache = new.env(), link = FALSE,
                              verbose = TRUE) {
   .meta_ensure_tables(con)
+  old_key <- .ncbi_env$project_key
+  .ncbi_env$project_key <- .ncbi_project_key(con)
+  on.exit(.ncbi_env$project_key <- old_key, add = TRUE)
   src <- META_SOURCES[[source]]
   status <- character(length(ids))
   msg <- rep(NA_character_, length(ids))
