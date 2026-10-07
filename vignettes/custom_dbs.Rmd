@@ -164,6 +164,7 @@ in the mapping file.
 
 <div class="alert alert-warning">
   <strong>Keep the reference inside the project folder.</strong> MitoPilot runs inside a container (Docker or Singularity/Apptainer), which only sees files under the paths it is told to mount.
+</div>
 
 ## Build custom databases for protein-coding gene curation
 
