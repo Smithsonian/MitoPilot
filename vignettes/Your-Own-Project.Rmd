@@ -136,7 +136,7 @@ To link samples to [GEOME](https://geome-db.org) records, [GBIF](https://www.gbi
 (Smithsonian NMNH EZIDs work there too), or BioSample/SRA accessions, and name
 those columns with the `mapping_geome`, `mapping_gbif`, and `mapping_ncbi`
 arguments of `new_project()`. Add `link_sources = TRUE` to fill in the other
-databases from whichever ID you have; see [Sample metadata](Specimen-Metadata.html).
+databases from whichever ID you have; see [Linking records across databases](Metadata-Linking.html).
 
 ```
 ID,Taxon,R1,R2,Voucher,BioSample

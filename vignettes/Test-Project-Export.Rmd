@@ -201,7 +201,7 @@ Other options in the Export Data window:
 - **Review PCG annotations for outliers** runs a final pre-submission check described below.
 - **NMNH user** adds the specimen voucher and EZID modifiers that Smithsonian
   NMNH records need, and checks them. See
-  [NMNH submissions](Specimen-Metadata.html#nmnh-submissions).
+  [NMNH voucher submissions](NMNH-Vouchers.html).
 
 Then click **Export**.
 
