@@ -6,16 +6,42 @@ window.MP_SAMPLE_TABLES =
 
 // One help affordance: every [data-toggle="mp-popover"] on the page (modals
 // and dynamically rendered UI included) opens its data-content in a
-// Bootstrap 3 popover on click or keyboard focus. Delegated, so it needs no
-// per-widget initialisation.
+// Bootstrap 3 popover on click. Opened and closed by hand, one at a time: a
+// click elsewhere, Escape, scrolling, a modal opening or closing, or the icon
+// being re-rendered away closes it, so none is left stranded on screen.
 $( document ).ready(function(){
   if (!$.fn.popover) return;
-  $(document.body).popover({
-    selector: '[data-toggle="mp-popover"]',
-    trigger: 'click focus',
-    placement: 'auto right',
-    container: 'body',
-    html: true
+  var open = null;
+  window.mpHidePopovers = function() {
+    if (open) {
+      $(open).attr('aria-expanded', 'false').popover('destroy');
+      open = null;
+    }
+    $('body > .popover').remove();
+  };
+  $(document).on('click', '[data-toggle="mp-popover"]', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var el = this, again = open === el;
+    mpHidePopovers();
+    if (again) return;
+    $(el).popover({ trigger: 'manual', placement: 'auto right', container: 'body', html: true })
+      .popover('show').attr('aria-expanded', 'true');
+    open = el;
+  });
+  $(document).on('click', function(e) {
+    if (open && !$(e.target).closest('.popover, [data-toggle="mp-popover"]').length) mpHidePopovers();
+  });
+  $(document).on('keydown', function(e) {
+    if (e.key === 'Escape' && open) mpHidePopovers();
+  });
+  document.addEventListener('scroll', function(e) {
+    var t = e.target;
+    if (open && !(t.closest && t.closest('.popover'))) mpHidePopovers();
+  }, true);
+  $(document).on('show.bs.modal hide.bs.modal', function() { mpHidePopovers(); });
+  $(document).on('shiny:value', function() {
+    setTimeout(function() { if (open && !document.body.contains(open)) mpHidePopovers(); }, 50);
   });
 });
 
