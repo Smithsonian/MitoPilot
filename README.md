@@ -13,6 +13,8 @@ experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](h
 Please see the [documentation
 website](https://smithsonian.github.io/MitoPilot/) for more details.
 
+MitoPilot is a product of the [NMNH Ocean DNA initiative](https://naturalhistory.si.edu/initiatives/oceans/ocean-science-center/ocean-dna) and does not represent an official Smithsonian Institution position or product.
+
 # Overview
 
 MitoPilot is a package for the assembly and annotation of mitochondrial
@@ -203,6 +205,3 @@ databases:
 | [FAQ](https://smithsonian.github.io/MitoPilot/articles/FAQ.html) and [Troubleshooting](https://smithsonian.github.io/MitoPilot/articles/Troubleshooting.html) | Common questions and pipeline failures                   |
 | [Reference](https://smithsonian.github.io/MitoPilot/reference/index.html)                                                                                     | All functions                                            |
 | [Changelog](https://smithsonian.github.io/MitoPilot/news/index.html)                                                                                          | Release notes and container tags                         |
-
-
-This is a research product from the NMNH Ocean DNA initiative and does not represent an official Smithsonian Institution position or product.
