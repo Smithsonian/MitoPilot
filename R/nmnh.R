@@ -368,9 +368,28 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE, save
     uf <- pick("uri_field")
     if (!is.na(vf)) vc <- c(user("specimen_voucher"), stats::setNames(.nmnh_key_value(row, r, vf), paste0("field:", vf)))
     if (!is.na(uf)) uc <- c(user("voucherURI"), stats::setNames(.nmnh_key_value(row, r, uf), paste0("field:", uf)))
+    # The record field a value was read from, for the report's details
+    from <- function(k, raw, what) {
+      if (is.null(k) || is.na(k) || k %in% NMNH_USER_SOURCES) return(NA_character_)
+      if (startsWith(k, "mapfile:")) return(paste("mapping file column", substring(k, 9)))
+      if (startsWith(k, "field:")) return(.nmnh_key_label(substring(k, 7)))
+      if (k == "GBIF via catalog number") return("GBIF record found by the catalog number: occurrenceID")
+      if (k == "GBIF via specimen link") {
+        return("GBIF record of the specimen link: institutionCode + collectionCode + catalogNumber")
+      }
+      if (k == "GBIF" && what == "uri") return("GBIF Occurrence occurrenceID")
+      if (!k %in% c("GBIF", "NCBI", "GEOME") || is.null(raw) || is.na(raw)) return(k)
+      rr <- src(k)
+      key <- sub("^https?://n2t\\.net/", "", raw)
+      hit <- rr[!is.na(rr$value) & (trimws(rr$value) == raw | grepl(key, rr$value, fixed = TRUE)), , drop = FALSE]
+      if (nrow(hit)) return(paste(k, hit$level[1], hit$field[1]))
+      combo <- switch(k, GBIF = GBIF_COMBOS, NCBI = NCBI_COMBOS, GEOME = GEOME_COMBOS)$specimen_voucher$sources
+      paste(k, paste(combo, collapse = " + "))
+    }
     out <- function(v, u, v_bad = character(), u_bad = character(), checked = FALSE, not_nmnh = FALSE) {
       data.frame(ID = id, nmnh_specimen_voucher = v$value, nmnh_voucherURI = u$value,
                  voucher_source = v$source, uri_source = u$source,
+                 voucher_from = from(v$source, v$raw, "voucher"), uri_from = from(u$source, u$raw, "uri"),
                  voucher_note = paste(c(v_bad, v$notes), collapse = "; "),
                  uri_note = paste(c(u_bad, u$notes), collapse = "; "),
                  ok = !length(c(v_bad, u_bad)), voucher_ok = !length(v_bad), uri_ok = !length(u_bad),
@@ -381,7 +400,8 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE, save
       raw <- function(cand) {
         for (k in names(cand)) {
           if (!is.na(cand[[k]]) && nzchar(trimws(cand[[k]]))) {
-            return(list(value = trimws(cand[[k]]), source = k, fixed = FALSE, notes = character()))
+            return(list(value = trimws(cand[[k]]), source = k, raw = trimws(cand[[k]]), fixed = FALSE,
+                        notes = character()))
           }
         }
         list(value = NA_character_, source = NA_character_, fixed = FALSE, notes = character())
@@ -394,7 +414,7 @@ nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE, save
         if (is.na(cand[[k]]) || !nzchar(trimws(cand[[k]]))) next
         n <- norm(cand[[k]])
         if (!is.na(n$value)) {
-          return(list(value = n$value, source = k, fixed = n$fixed,
+          return(list(value = n$value, source = k, raw = trimws(cand[[k]]), fixed = n$fixed,
                       notes = c(notes, if (n$fixed) n$note)))
         }
         notes <- c(notes, paste(k, n$note, "(skipped)"))

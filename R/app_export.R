@@ -1306,7 +1306,9 @@ export_server <- function(id) {
         # short line: verdict and source; the full notes sit behind a help icon
         short <- if (is.na(src)) "" else paste0(" (", nmnh_source_short(src), ")")
         head1 <- strsplit(raw, "; ", fixed = TRUE)[[1]][1] %|NA|% "problem"
+        used <- r[[paste0(field, "_from")]][index]
         full <- if (is.null(bad)) nmnh_note(src, raw) else ""
+        if (is.null(bad) && !is.na(used)) full <- paste0("Field: ", used, if (nzchar(raw)) paste0("\n", gsub("; ", "\n", raw, fixed = TRUE)))
         if (is.null(bad) && (identical(raw, "missing") || !nzchar(full))) {
           full <- "No value found in the mapping file, GBIF, NCBI, or GEOME."
         }
@@ -1334,7 +1336,8 @@ export_server <- function(id) {
           div(class = if (st[[1]] == "muted") "text-muted" else paste0("mp-fg-", st[[1]]),
               style = "font-size: var(--mp-fs-meta); white-space: normal;",
               icon(st[[2]]), " ", st[[3]],
-              if (nzchar(full)) mp_help_tip(htmltools::htmlEscape(full), label = paste(field, r$ID[index])))
+              if (nzchar(full)) mp_help_tip(gsub("\n", "<br>", htmltools::htmlEscape(full), fixed = TRUE),
+                                               label = paste(field, r$ID[index])))
         ))
       }
       d <- data.frame(ID = r$ID, not_nmnh = r$not_nmnh, specimen_voucher = r$nmnh_specimen_voucher,
