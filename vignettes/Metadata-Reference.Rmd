@@ -1,0 +1,134 @@
+---
+title: "Metadata field reference"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Metadata field reference}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<style>
+strong { font-weight: bold; }
+</style>
+
+Look-up tables for [Sample metadata](Specimen-Metadata.html).
+
+## GenBank-ready fields
+
+Each field is named `<source>_<name>`, for example `gbif_lat_lon`. A field is
+empty for a sample unless its required parts exist. For GEOME, each value comes
+from the nearest record that has it (tissue, then sample, then event). GBIF
+fields come from the occurrence only.
+
+| Name | GEOME (`geome_`) | GBIF (`gbif_`) | NCBI (`ncbi_`) |
+|---|---|---|---|
+| `lat_lon` | `decimalLatitude`, `decimalLongitude` | `decimalLatitude`, `decimalLongitude` | `lat_lon` (a decimal pair is converted) |
+| `collection_date` | `yearCollected`, `monthCollected`, `dayCollected` | `year`, `month`, `day`; else a single-date `eventDate` | `collection_date` |
+| `geo_loc_name` | `country`, then `stateProvince` and `locality` | `country`, then `stateProvince` and `locality` | `geo_loc_name` |
+| `specimen_voucher` | `genbankSpecimenVoucher`; else `institutionCode` and `catalogNumber` | `institutionCode`, `collectionCode`, `catalogNumber` | `specimen_voucher` |
+| `collected_by` | `collectorList` | `recordedBy` | `collected_by` |
+| `identified_by` | | `identifiedBy` | `identified_by` |
+| `tissue_type` | `tissueType` | | |
+| `sex` | `sex` | `sex` (lowercased) | `sex` (lowercased) |
+| `dev_stage` | `lifeStage` | `lifeStage` (lowercased) | `dev_stage` (lowercased) |
+
+Example values: `lat_lon` `17.48260 S 149.89990 W`; `collection_date`
+`2006-03-18`, `2009-11`, or `2009`; `geo_loc_name` `French Polynesia: Moorea`;
+`specimen_voucher` `USNM:FISH:407263`.
+
+- **Vouchers.** A catalog number that is a web address or an ARK gives an
+  empty voucher. GBIF vouchers drop a leading repeat of the institution code
+  (`USNM 419933` becomes `USNM:FISH:419933`).
+- **NCBI placeholders** such as `missing`, `not collected`, or `not provided`
+  give an empty value.
+
+NCBI also offers fields that insert the `[BioSample=]` and `[BioProject=]`
+header tags, which GenBank uses to link the record to those projects:
+
+| Name | Built from | Example |
+|---|---|---|
+| `ncbi_biosample` | BioSample accession | `SAMN29555051` |
+| `ncbi_bioproject` | first BioProject of the BioSample | `PRJNA720393` |
+| `ncbi_biosample_sra` | the SRA record's `biosample` | `SAMN29555051` |
+| `ncbi_bioproject_sra` | the SRA record's `bioproject` | `PRJNA720393` |
+
+A BioSample can belong to several BioProjects; check that `ncbi_bioproject` is
+the one for your submission. The `_sra` fields are filled only for samples
+linked through an SRA accession.
+
+## Raw fields
+
+Every other field in a fetched record is available as
+`<source>_<Level>_<field>`, for example `geome_Tissue_tissueType`,
+`gbif_Occurrence_occurrenceID`, or `ncbi_BioSample_isolate`.
+
+## GBIF notes
+
+GBIF interprets the records it publishes, so check its values before
+submitting:
+
+- `gbif_lat_lon` is empty when GBIF flags the coordinates `ZERO_COORDINATE`,
+  `COORDINATE_INVALID`, or `COORDINATE_OUT_OF_RANGE`.
+- Other flags keep the value but are shown as badges in the viewer. Check
+  values flagged `PRESUMED_SWAPPED_COORDINATE`, `PRESUMED_NEGATED_LATITUDE` or
+  `_LONGITUDE`, `COORDINATE_REPROJECTED`, `COORDINATE_ROUNDED`, or
+  `COUNTRY_COORDINATE_MISMATCH`.
+- Coordinates of sensitive species may be deliberately generalized. Check the
+  `dataGeneralizations` and `coordinateUncertaintyInMeters` raw fields.
+- GBIF's `country` is its own English name (`United States of America`), not
+  always the name GenBank expects (`USA`). Check `geo_loc_name` against
+  GenBank's country list.
+- `identifiedBy` and the GBIF taxon describe the museum specimen, which may
+  differ from your identification of the sequenced tissue.
+
+## Mapping-file columns used by Compare
+
+The Compare tab finds your mapping-file columns by name, ignoring case. The
+first match wins. Use `set_metadata_columns()` or **Mapfile columns...** when
+yours differ.
+
+| Item | Columns tried |
+|---|---|
+| coordinates | `lat_lon`; or a latitude column (`lat`, `latitude`, `decimalLatitude`) plus a longitude column (`lon`, `long`, `longitude`, `decimalLongitude`) |
+| collection_date | `collection_date`, `date`, `eventDate` |
+| country | `country`, `geo_loc_name` (the part before `:`) |
+| locality | `locality` |
+| voucher | `specimen_voucher`, `voucher`, `catalogNumber` |
+| collector | `collected_by`, `collector`, `recordedBy` |
+| sex | `sex` |
+| dev_stage | `dev_stage`, `life_stage`, `lifeStage` |
+| taxon | `Taxon` (always) |
+
+NCBI's country and locality come from the two parts of `geo_loc_name`, and its
+taxon from the BioSample organism.
+
+## Voucher search fields
+
+When [linking](Metadata-Linking.html#matching-a-voucher-to-a-gbif-record)
+searches GBIF for a voucher, it reads:
+
+| Record | Fields |
+|---|---|
+| NCBI BioSample | `specimen_voucher`, `genbankSpecimenVoucher`, `materialSampleID`, `voucherCatalogNumber`, `bio_material` |
+| GEOME | `genbankSpecimenVoucher`, `materialSampleID`, `voucherCatalogNumber`, `otherCatalogNumbers`, `catalogNumber`, or a bare `voucherCatalogNumber` with the `institutionID` |
+
+## Fetch messages
+
+Shown in the viewer, when hovering a faded logo, or in the warning after a
+fetch.
+
+| Message | Meaning |
+|---|---|
+| `BCID not found in GEOME` | No GEOME record has that ID. A typo in a well-formed BCID shows up this way. |
+| `record is private or needs a GEOME login` | The record belongs to a private GEOME project. |
+| `BCID not recognized by GEOME` | GEOME rejected the ID as malformed. |
+| `'x' is not a GEOME BCID (expected ark:/NNNNN/...)` | The value does not look like a BCID. |
+| `GBIF occurrence not found (IDs can change when a dataset is republished)` | No GBIF occurrence has that gbifID. Look the specimen up again on gbif.org. |
+| `'x' is not a GBIF occurrence ID (expected digits)` | The value is not a gbifID or gbif.org link. |
+| `BioSample ... not found`, `SRA accession ... not found` | NCBI has no record with that accession. |
+| `SRA accession ... has no linked BioSample` | Supply the BioSample accession instead. |
+| `'x' is not a BioSample or SRA accession (...)` | The value is not a recognized NCBI accession. |
+| `could not reach GEOME / GBIF / NCBI (...)` | No connection. Try again later with `fetch_*()` or **Refresh all**. |
+| `GEOME / GBIF / NCBI returned HTTP ...` | Any other server error, often a busy server. Try again later; for NCBI, set `ENTREZ_KEY`. |
+| `N possible GBIF matches for ...; not linked` | Linking found several GBIF specimens for a voucher. Paste the right gbifID. |
+| `... record links to ...; kept your ID ...` | A fetched record names a different ID than yours. Check which is right. |

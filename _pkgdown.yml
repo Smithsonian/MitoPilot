@@ -47,13 +47,20 @@ articles:
   navbar: Usage
   contents:
   - 'Your-Own-Project'
-  - 'Specimen-Metadata'
   - 'Your-Own-Assemblies'
   - 'Assembly-Methods'
   - 'Difficult-Assemblies'
   - 'Ruleset-Browser'
   - 'Curation-and-Validation'
   - 'custom_dbs'
+
+- title: "Metadata"
+  navbar: Metadata
+  contents:
+  - 'Specimen-Metadata'
+  - 'Metadata-Linking'
+  - 'NMNH-Vouchers'
+  - 'Metadata-Reference'
 
 - title: "Computing Environments"
   navbar: Computing Environments
