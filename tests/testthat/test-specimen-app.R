@@ -13,7 +13,7 @@ test_that(".meta_save_fields replaces the selection", {
 test_that("the Export column picker offers a GEOME group, and ticked GEOME
           fields render as a GEOME column group in the Export table", {
   proj <- withr::local_tempdir()
-  suppressMessages(new_test_project_userAsmb(path = proj, executor = "local", Rproj = FALSE))
+  suppressMessages(new_test_project_userAsmb(path = proj, executor = "local", Rproj = FALSE, fetch_metadata = FALSE))
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(proj, ".sqlite"))
   withr::defer(DBI::dbDisconnect(con))
   withr::local_options(MitoPilot.db = file.path(proj, ".sqlite"))
@@ -51,27 +51,6 @@ test_that("the Export column picker offers a GEOME group, and ticked GEOME
     expect_true("specimen" %in% id[shown & !nzchar(cls)])
     expect_false(any(c("geome_lat_lon", "geome_Event_country", "gbif_sex") %in% id[shown]))
   })
-})
-
-test_that("specimen_fields_modal has a GEOME and a GBIF section", {
-  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-  on.exit(DBI::dbDisconnect(con))
-  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
-  .meta_ensure_tables(con)
-  DBI::dbAppendTable(con, "meta_records", data.frame(
-    ID = "s1", source = c("GEOME", "GBIF"), level = c("Event", "Occurrence"), depth = 0L,
-    ref = "r", field = c("country", "countryCode"), value = c("Peru", "PE")))
-  .meta_save_fields(con, c("geome:combo:lat_lon", "gbif:combo:sex"))
-  html <- as.character(specimen_fields_modal(NS("exp"), list(GEOME = meta_field_summary(con, "GEOME"),
-                                                             GBIF = meta_field_summary(con, "GBIF"))))
-  expect_match(html, "Metadata fields for export", fixed = TRUE)
-  expect_match(html, "exp-geome_combos", fixed = TRUE)
-  expect_match(html, "exp-gbif_combos", fixed = TRUE)
-  expect_match(html, "exp-geome_raw", fixed = TRUE)
-  expect_match(html, "exp-gbif_raw", fixed = TRUE)
-  expect_match(html, "{gbif_specimen_voucher}", fixed = TRUE)
-  expect_match(html, "value=\"gbif:combo:sex\" checked", fixed = TRUE)
-  expect_lt(regexpr("exp-geome_combos", html), regexpr("exp-gbif_combos", html))
 })
 
 status_db <- function() {
@@ -188,8 +167,8 @@ test_that("panel module servers start outside a reactive context, with specimen 
       ms$close()
     }
   }
-  start(function(...) new_test_project(n = 2, ...), c("assemble_server", "annotate_server", "export_server"))
-  start(new_test_project_userAsmb, "assemble_server_userAsmb")
+  start(function(...) new_test_project(n = 2, fetch_metadata = FALSE, ...), c("assemble_server", "annotate_server", "export_server"))
+  start(function(...) new_test_project_userAsmb(fetch_metadata = FALSE, ...), "assemble_server_userAsmb")
 })
 
 test_that("meta_record_view orders GEOME root first and links BCIDs", {
@@ -270,17 +249,6 @@ test_that("specimen_status and the column renderer know the NCBI source", {
   expect_true(file.exists(app_sys("app", "www", "specimen", "ncbi_helix.png")))
 })
 
-test_that("specimen_fields_modal has a section per source", {
-  con <- DBI::dbConnect(RSQLite::SQLite(), ":memory:")
-  on.exit(DBI::dbDisconnect(con))
-  DBI::dbWriteTable(con, "samples", data.frame(ID = "s1", Taxon = "x"))
-  .meta_ensure_tables(con)
-  sm <- lapply(stats::setNames(nm = names(META_SOURCES)), function(s) meta_field_summary(con, s))
-  html <- as.character(specimen_fields_modal(shiny::NS("x"), sm))
-  for (s in c("GEOME", "GBIF", "NCBI")) expect_match(html, paste0("<h4>", s, "</h4>"), fixed = TRUE)
-  expect_match(html, "x-ncbi_combos", fixed = TRUE)
-})
-
 test_that("meta_record_view links NCBI levels in SRA, BioSample, BioProject order", {
   recs <- data.frame(level = c("BioProject", "SRA", "BioSample"), depth = c(2L, 0L, 1L),
                      ref = c("PRJNA1", "SRR1", "SAMN1"), field = "accession",
@@ -296,6 +264,17 @@ test_that("the compare view has an NCBI column", {
   html <- as.character(specimen_compare_view(cf))
   expect_match(html, "<th>NCBI</th>", fixed = TRUE)
   expect_match(html, "<td>Canada</td>", fixed = TRUE)
+})
+
+test_that("the compare view flags coordinates that agree only after rounding", {
+  cf <- data.frame(ID = "s1", concept = "coordinates", csv_column = "lat_lon",
+                   csv_value = "28.54, -81.33", geome_value = NA,
+                   gbif_value = "28.53783 N 81.33322 W", ncbi_value = NA, status = "agree")
+  html <- as.character(specimen_compare_view(cf))
+  expect_match(html, "<td>agree (rounding)</td>", fixed = TRUE)
+  expect_match(html, "<td>28.53783 N 81.33322 W</td>", fixed = TRUE)
+  cf$csv_value <- "28.53783, -81.33322"
+  expect_match(as.character(specimen_compare_view(cf)), "<td>agree</td>", fixed = TRUE)
 })
 
 test_that("the viewer NCBI tab has an ID box", {

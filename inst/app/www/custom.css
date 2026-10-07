@@ -30,6 +30,7 @@
   --mp-surface-alt:    #f5f5f5;  /* table stripe, chips, code surface  */
   --mp-surface-dark:   #2d2d2d;  /* command/log surface                */
   --mp-on-dark:        #dcdcdc;
+  --mp-nmnh-accent:    #ffcd00;  /* Smithsonian yellow, decoration only */
 
   /* type */
   --mp-font-mono: Menlo, Monaco, Consolas, "Courier New", monospace;
@@ -454,6 +455,11 @@ details summary:hover {
    820px (and at 400% zoom) Bootstrap's fluid width takes over, so a dialog
    never forces horizontal panning. */
 @media (min-width: 820px) {
+  .modal-xl {
+    width: 92% !important;
+    max-width: 1500px !important;
+  }
+
   .modal-lg {
     width: auto !important;
     min-width: 800px !important;
@@ -974,11 +980,11 @@ a.mp-link:focus-visible {
 .mp-meta-citation { margin: 4px 0 6px; font-size: var(--mp-fs-meta); }
 
 /* Export Data token chips */
-/* The column types sit in one bordered box inside Available columns, each type
+/* The column types sit in one bordered box inside Available metadata, each type
    indented with its chips indented again beneath it. */
 .mp-token-list {
-  margin: 8px 0; padding: 8px 14px 6px; border: 1px solid var(--mp-border);
-  border-radius: var(--mp-radius, 4px); background: var(--mp-surface-alt);
+  margin: var(--mp-space-2) 0; padding: var(--mp-space-2) var(--mp-space-3);
+  border: 1px solid var(--mp-border); border-radius: var(--mp-radius); background: var(--mp-surface);
 }
 .mp-token-filter { max-width: 260px; margin-bottom: 6px; }
 .mp-token-lead { margin: 4px 0 2px; font-size: var(--mp-fs-meta); color: var(--mp-text-muted); }
@@ -1013,3 +1019,169 @@ a.mp-link:focus-visible {
 .mp-spec-link .checkbox, .mp-spec-link .form-group { margin: 0; }
 .mp-spec-tabs { position: relative; }
 .mp-spec-filter { position: absolute; top: 4px; right: 15px; width: 200px; z-index: 2; }
+
+/* Metadata modal: Show and Export tick columns */
+.mp-mv-head { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-weight: 600; cursor: pointer; }
+.mp-mv-head input { margin: 0; }
+.mp-mv-na { color: var(--bs-secondary-color, #888); font-size: 0.85em; }
+.mp-mv-partial { color: #c46a00; font-weight: 600; }
+.mp-mv-token { cursor: copy; white-space: normal; overflow-wrap: anywhere; }
+.mp-mv-copied { outline: 2px solid #3c9d4a; }
+.mp-mv-link { font-weight: normal; margin: 0; }
+.mp-mv-toggle.active { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2); font-weight: 600; }
+.mp-mv-count { margin-right: auto; }
+
+/* negative margins keep the logo from growing the line, which shifts the box */
+.nmnh-logo {
+  height: 1.2em;
+  vertical-align: middle;
+  margin: -0.2em 0.3em -0.2em 0;
+}
+
+/* Available metadata panel: tinted so it reads as a resource, not a header */
+details.mp-meta-panel {
+  border: 1px solid var(--mp-border); border-left: 3px solid var(--mp-primary);
+  border-radius: var(--mp-radius); background: var(--mp-primary-soft);
+  padding: var(--mp-space-2) var(--mp-space-3);
+}
+details.mp-meta-panel > summary { border-bottom: none; margin: 0; padding: 0; }
+.mp-meta-count { font-weight: 400; font-size: var(--mp-fs-meta); }
+.mp-meta-count { color: var(--mp-text-muted); }
+
+/* Field colours by source, shared by header pills, preview, and the
+   Available metadata group dots. Colour-blind safe (Tol/Okabe-Ito); orange is
+   kept for "missing" only. */
+.mp-src-basic, .mp-src-pipeline { --mp-src-bg: #ffffff; --mp-src-fg: #777777; }
+/* NMNH: Smithsonian sunburst yellow with its blue */
+.mp-src-nmnh     { --mp-src-bg: #ffe580; --mp-src-fg: #009ade; }
+.mp-src-mapfile  { --mp-src-bg: #a0c9ad; --mp-src-fg: #117733; }
+.mp-src-gbif     { --mp-src-bg: #cfa7bb; --mp-src-fg: #882255; }
+.mp-src-ncbi     { --mp-src-bg: #ada7cf; --mp-src-fg: #332288; }
+.mp-src-geome    { --mp-src-bg: #bbe1f6; --mp-src-fg: #56B4E9; }
+.mp-src-other    { --mp-src-bg: transparent; --mp-src-fg: #999999; }
+/* matches the <code> colour used for {completeness} in the help text */
+.mp-src-completeness { --mp-src-bg: #f9f2f4; --mp-src-fg: #c7254e; }
+.mp-src-dot {
+  display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%;
+  margin-right: 0.4em; background: var(--mp-src-fg);
+}
+
+.mp-hl-wrap { position: relative; }
+.mp-hl-wrap textarea.mp-hl { position: relative; z-index: 1; background: transparent; }
+.mp-hl-back {
+  position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  white-space: pre-wrap; overflow-wrap: break-word; color: transparent;
+  border-style: solid; border-color: transparent; border-radius: var(--mp-radius);
+  background: var(--mp-surface);
+}
+.mp-hl-back mark {
+  color: transparent; padding: 0; border-radius: 3px;
+  background: var(--mp-src-bg); box-shadow: 0 0 0 1px var(--mp-src-fg);
+}
+.mp-hl-back mark.mp-src-other { box-shadow: none; border-bottom: 1px dashed var(--mp-src-fg); }
+.mp-hl-back mark.mp-hl-miss, .mp-hl-tok.mp-hl-miss { border-bottom: 3px solid #E69F00; }
+.mp-hl-mod { background: var(--mp-surface-alt); border-radius: 3px; }
+
+details.mp-hdr-preview { margin: 2px 0 8px; }
+details.mp-hdr-preview > summary {
+  font-size: var(--mp-fs-meta); font-weight: 400; color: var(--mp-text-muted);
+  border-bottom: none; padding: 0; margin: 2px 0;
+}
+.mp-hdr-preview-body {
+  font-family: var(--bs-font-monospace, monospace); font-size: var(--mp-fs-meta);
+  white-space: pre-wrap; word-break: break-all; max-height: 5.5em; overflow: auto;
+  padding: 4px 8px; background: var(--mp-surface-alt); border-radius: var(--mp-radius);
+}
+.mp-hl-tok { border-radius: 3px; padding: 0 2px; background: var(--mp-src-bg, transparent); }
+.mp-hl-empty { font-style: italic; color: var(--mp-warning); }
+.mp-hl-bad { color: var(--mp-danger, #a94442); text-decoration: underline wavy; }
+
+/* Export window cards: one box style; only the accent and fill differ */
+.mp-card {
+  border: 1px solid var(--mp-border);
+  border-left: 3px solid var(--mp-card-accent, var(--mp-border));
+  border-radius: var(--mp-radius);
+  background: var(--mp-card-bg, var(--mp-surface-alt));
+  padding: var(--mp-space-2) var(--mp-space-3);
+  margin: 0 0 var(--mp-space-3);
+}
+.mp-card > :last-child, .mp-card .shiny-input-container:last-child { margin-bottom: 0; }
+.mp-card-title, .mp-card .control-label {
+  font-size: var(--mp-fs-body); font-weight: 600; margin: 0 0 var(--mp-space-1);
+}
+.mp-card-title { display: flex; align-items: center; gap: var(--mp-space-1); }
+.mp-card-title .shiny-input-container { width: auto !important; margin-bottom: 0; }
+.mp-card-title .pretty { margin: 0; }
+.mp-card-title .pretty .state label { font-weight: 600; }
+.mp-card-body { font-size: var(--mp-fs-meta); margin-top: var(--mp-space-1); }
+.mp-card-body .help-block { margin-bottom: var(--mp-space-1); }
+.mp-card-note { font-weight: 400; font-size: var(--mp-fs-meta); color: var(--mp-text-muted); }
+.mp-card-summary { --mp-card-accent: var(--mp-primary); font-size: var(--mp-fs-meta); }
+.mp-card-nmnh { --mp-card-accent: var(--mp-nmnh-accent); }
+.mp-card-plain { --mp-card-accent: var(--mp-neutral); --mp-card-bg: var(--mp-surface); }
+
+/* NMNH section: where each value comes from, then the ready count */
+.mp-nmnh-sources { font-size: var(--mp-fs-meta); }
+.mp-nmnh-sources > div { margin: 2px 0; }
+details.mp-nmnh-cols { margin: 4px 0; }
+details.mp-nmnh-cols > summary {
+  font-size: var(--mp-fs-meta); font-weight: 400; border-bottom: none; padding: 0;
+}
+details.mp-nmnh-cols label { font-size: var(--mp-fs-meta); }
+.mp-nmnh-status { font-size: var(--mp-fs-meta); margin-top: 4px; }
+
+/* Export window: options and headers left, Available metadata right, each
+   column with its own scroll bar. Narrow windows stack them and pin the
+   metadata panel to the bottom as a drawer. */
+.mp-modal-form.mp-export-body { max-height: none; overflow: visible; }
+.mp-export-split { display: flex; flex-flow: row nowrap; gap: 1.5em; align-items: flex-start; }
+.mp-export-main, .mp-export-side { max-height: 70vh; overflow-y: auto; }
+.mp-export-main { flex: 3 1 0; min-width: 0; padding-right: 8px; }
+.mp-export-side { flex: 2 1 0; min-width: 280px; }
+.mp-export-side details.mp-meta-panel { margin-bottom: 0; }
+@media (max-width: 819px) {
+  .mp-modal-form.mp-export-body { max-height: 70vh; overflow-y: auto; }
+  .mp-export-split { flex-flow: column nowrap; align-items: stretch; }
+  .mp-export-main, .mp-export-side { flex: none; min-width: 0; max-height: none; overflow: visible; }
+  .mp-export-main { padding-right: 0; }
+  .mp-export-side {
+    position: sticky; bottom: -15px; z-index: 2; margin: 0 -15px -15px;
+    padding: 0 15px 15px; background: var(--mp-surface);
+    box-shadow: 0 -4px 8px rgba(0, 0, 0, 0.08);
+  }
+  .mp-export-side details.mp-meta-panel[open] { max-height: 40vh; overflow-y: auto; }
+}
+
+/* NMNH user: the sunburst is the checkbox, grey when off, colour when on */
+.mp-nmnh-toggle .nmnh-logo {
+  height: 1.6em; margin: -0.3em 0.4em -0.3em 0;
+  filter: grayscale(1); opacity: 0.45; transition: filter 0.15s, opacity 0.15s;
+}
+.mp-nmnh-toggle .pretty input:checked ~ .state .nmnh-logo { filter: none; opacity: 1; }
+.mp-nmnh-toggle .pretty input:focus-visible ~ .state .nmnh-logo {
+  outline: 2px solid var(--mp-primary); outline-offset: 2px; border-radius: 50%;
+}
+
+/* NMNH voucher report: tables scroll inside the window; one button size,
+   and the CSV upload shows as a single button */
+.mp-nmnh-scroll { max-height: 35vh; overflow-y: auto; }
+.mp-nmnh-table-title { font-weight: 600; margin: var(--mp-space-3) 0 var(--mp-space-1); }
+.mp-nmnh-pick { height: 26px; margin-top: 4px; padding: 2px 6px; font-size: 12px; }
+.mp-nmnh-fields { margin-bottom: 8px; font-size: var(--mp-fs-meta); }
+.modal-footer:has(.mp-nmnh-actions) { display: flex; align-items: center; gap: 8px; }
+.mp-nmnh-actions { display: flex; flex-flow: row wrap; gap: 8px; align-items: center; margin-right: auto; }
+.mp-nmnh-actions .btn, .modal-footer:has(.mp-nmnh-actions) > .btn { height: 30px; margin: 0; padding: 4px 10px; font-size: 12px; line-height: 1.5; }
+.mp-nmnh-actions .shiny-input-container { width: auto !important; margin-bottom: 0; }
+.mp-nmnh-actions .shiny-input-container > label { display: none; }
+.mp-nmnh-actions .input-group, .mp-nmnh-actions .input-group-btn { display: flex; margin: 0; }
+.mp-nmnh-actions .input-group .form-control { display: none; }
+.mp-nmnh-actions .input-group-btn, .mp-nmnh-actions .input-group-btn .btn { border-radius: 3px; }
+.mp-nmnh-actions .shiny-file-input-progress { display: none !important; }
+
+/* Database check failed: say so in the header, since the app stops loading */
+.mp-header .mp-header-warn { color: var(--mp-warning); font-weight: 600; }
+.mp-header .mp-header-warn code { font-weight: 400; }
+
+/* Metadata viewer: per-value copy button, shown on row hover */
+.mp-meta-level .mp-meta-copy { padding: 0 4px; margin-left: 4px; opacity: 0; color: var(--mp-text-muted, #6c757d); }
+.mp-meta-level tr:hover .mp-meta-copy, .mp-meta-level .mp-meta-copy:focus-visible { opacity: 1; }

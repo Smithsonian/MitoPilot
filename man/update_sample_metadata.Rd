@@ -13,8 +13,8 @@ update_sample_metadata(
   fetch_geome = TRUE,
   mapping_gbif = "GBIF_ID",
   fetch_gbif = TRUE,
-  mapping_biosample = "BioSample",
-  fetch_biosample = TRUE,
+  mapping_ncbi = "BioSample",
+  fetch_ncbi = TRUE,
   link_sources = FALSE
 )
 }
@@ -37,13 +37,13 @@ update_sample_metadata(
 \item{fetch_gbif}{Fetch GBIF metadata for samples with a GBIF ID
 (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.}
 
-\item{mapping_biosample}{Name of the mapping-file column holding NCBI
+\item{mapping_ncbi}{Name of the mapping-file column holding NCBI
 BioSample or SRA accessions (optional). Must not be the sample ID column.
 Stored as `BioSample`. See `vignette("Specimen-Metadata")`.}
 
-\item{fetch_biosample}{Fetch NCBI metadata for samples with a BioSample
+\item{fetch_ncbi}{Fetch NCBI metadata for samples with a BioSample
 value (default TRUE). Set FALSE when offline and run
-[fetch_biosample()] later.}
+[fetch_ncbi()] later.}
 
 \item{link_sources}{Follow links between GEOME, GBIF, and NCBI records for
 these samples (default FALSE). Linking also runs when the project setting

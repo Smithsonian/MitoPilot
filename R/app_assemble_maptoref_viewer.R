@@ -87,13 +87,14 @@ maptoref_viewer_server <- function(id, rv) {
           btn("whole", "Whole genome"),
           btn("zoom_in", NULL, icon("magnifying-glass-plus"), "Zoom in"),
           btn("zoom_out", NULL, icon("magnifying-glass-minus"), "Zoom out"),
+          btn("copy", "Copy sequence", title = "Copy the bases in view as FASTA"),
           mp_checkbox(ns("show_cov"), label = "Coverage", value = TRUE),
           mp_checkbox(ns("show_nt"), label = "Nucleotides", value = TRUE),
           reads_box
         ),
         div(class = "mp-coverage-caption",
             paste("Drag or scroll sideways to pan, scroll or pinch to zoom.",
-                  "Letters appear when zoomed in; reads appear under 1,000 bp.")),
+                  "Letters appear when zoomed in; reads appear under 1,000 bp. Copy sequence copies the bases in view.")),
         uiOutput(ns("note")),
         div(
           class = "mp-seqview",

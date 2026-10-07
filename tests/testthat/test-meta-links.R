@@ -169,9 +169,9 @@ test_that("no linking unless asked; fetch_* follow the project switch", {
   .meta_ensure_tables(db)
   .meta_set_link_enabled(db, TRUE)
   DBI::dbDisconnect(db)
-  fetch_biosample(dir)
+  fetch_ncbi(dir)
   expect_equal(calls$GEOME, 1L)
-  fetch_biosample(dir, link_sources = FALSE)
+  fetch_ncbi(dir, link_sources = FALSE)
   expect_equal(calls$GEOME, 1L)
 })
 
@@ -209,7 +209,7 @@ test_that("update_sample_metadata makes a CSV-supplied ID the user's and keeps l
   m <- data.frame(ID = c("s1", "s2"), Taxon = "x", R1 = "a", R2 = "b", BioSample = c("", ""))
   utils::write.csv(m, file.path(dir, "m.csv"), row.names = FALSE)
   suppressMessages(new_db(db_path = file.path(dir, ".sqlite"), mapping_fn = file.path(dir, "m.csv"),
-                          fetch_biosample = FALSE))
+                          fetch_ncbi = FALSE))
   con <- DBI::dbConnect(RSQLite::SQLite(), file.path(dir, ".sqlite"))
   on.exit(DBI::dbDisconnect(con), add = TRUE)
   .meta_ensure_tables(con)
@@ -218,7 +218,7 @@ test_that("update_sample_metadata makes a CSV-supplied ID the user's and keeps l
   DBI::dbExecute(con, "INSERT INTO meta_links VALUES ('s2', 'NCBI', 'SAMN1', 'GEOME Tissue sequencing record', NULL)")
   m$BioSample <- c("SAMN1", "")
   utils::write.csv(m[c("ID", "Taxon", "BioSample")], file.path(dir, "m2.csv"), row.names = FALSE)
-  suppressMessages(update_sample_metadata(dir, file.path(dir, "m2.csv"), fetch_biosample = FALSE))
+  suppressMessages(update_sample_metadata(dir, file.path(dir, "m2.csv"), fetch_ncbi = FALSE))
   expect_equal(DBI::dbGetQuery(con, "SELECT ID FROM meta_links ORDER BY ID")$ID, "s2")
   expect_equal(DBI::dbGetQuery(con, "SELECT BioSample FROM samples ORDER BY ID")$BioSample, c("SAMN1", "SAMN1"))
   .meta_remove(con)
@@ -310,4 +310,49 @@ test_that("two sources naming different records for a linked ID leave a note", {
   expect_match(l$note, "NCBI record links to ark:/65665/3bc380cef-b981-48ea-ac5f-0283b239833a.*kept ark:/65665/3dd003c5a")
   .meta_link_sample(con, "s1")
   expect_equal(nrow(DBI::dbGetQuery(con, "SELECT * FROM meta_links WHERE source = 'GBIF' AND note IS NOT NULL")), 1L)
+})
+
+test_that("vouchers parse as Darwin Core triplets, doublets, and INST CAT forms", {
+  expect_equal(.parse_voucher("USNM:FISH:419933"), list(inst = "USNM", cat = "419933", coll = "FISH"))
+  expect_equal(.parse_voucher("UW 157636")$cat, "157636")
+  expect_equal(.parse_voucher("urn:catalog:UWFC:ADULT COLLECTION:UW 157636")$coll, "ADULT COLLECTION")
+  expect_equal(.parse_voucher("FMNH:Mammal:1234 | MBG 33424")$cat, "1234")
+  expect_null(.parse_voucher("http://n2t.net/ark:/65665/3abc"))
+  expect_null(.parse_voucher("250399"))
+})
+
+test_that("sequence-derived GBIF datasets never link, and INST CAT doublets do", {
+  insdc <- gocc(6189916995, "Psychrolutes paradoxus")
+  insdc$datasetKey <- "d8cd16ba-bb74-4420-821e-083f2bac17c2"
+  mined <- gocc(5860571592, "Psychrolutes paradoxus", basis = "MATERIAL_SAMPLE")
+  mined$institutionCode <- "Mined from GenBank, NCBI"
+  local_mocked_bindings(.gbif_get = function(path) list(results = list(insdc, mined)))
+  expect_null(.gbif_find_voucher("UW:157636", "Psychrolutes paradoxus"))
+  local_mocked_bindings(.gbif_get = function(path) {
+    if (grepl("catalogNumber=UW%20157636", path, fixed = TRUE)) {
+      return(list(results = list(insdc, gocc(2013211250, "Psychrolutes paradoxus", "ADULT COLLECTION"))))
+    }
+    list(results = list())
+  })
+  expect_equal(.gbif_find_voucher("UW 157636", "Psychrolutes paradoxus")$ref, "2013211250")
+})
+
+test_that("a collection code narrows hits but does not reject the only match", {
+  hits <- list(results = list(gocc(1, "Fundulus majalis", "ADULT COLLECTION")))
+  local_mocked_bindings(.gbif_get = function(path) hits)
+  expect_equal(.gbif_find_voucher("USNM:FISH:419933", "Fundulus majalis")$ref, "1")
+})
+
+test_that("GEOME and NCBI records link to GBIF through more voucher fields", {
+  local_mocked_bindings(.gbif_get = function(path) {
+    if (grepl("UW", path, fixed = TRUE)) list(results = list(gocc(2013211250, "Psychrolutes paradoxus")))
+    else list(results = list())
+  }, .geome_get = function(path, query = list()) list(children = list()))
+  r <- lrecs("Sample", c("institutionID", "voucherCatalogNumber"), c("UW", "157636"))
+  c <- .meta_link_candidates("GEOME", r, "Psychrolutes paradoxus")
+  expect_equal(c$GBIF$ref, "2013211250")
+  expect_equal(c$GBIF$via, "GEOME Sample voucherCatalogNumber UW:157636")
+  r <- lrecs("BioSample", "materialSampleID", "UW:157636")
+  c <- .meta_link_candidates("NCBI", r, "Psychrolutes paradoxus")
+  expect_equal(c$GBIF$via, "NCBI BioSample materialSampleID UW:157636")
 })

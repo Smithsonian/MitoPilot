@@ -14,12 +14,12 @@
 #' @param mapping_gbif Name of the mapping-file column holding GBIF occurrence IDs
 #' @param fetch_gbif Fetch GBIF metadata for samples with a GBIF ID
 #'   (default TRUE). Set FALSE when offline and run [fetch_gbif()] later.
-#' @param mapping_biosample Name of the mapping-file column holding NCBI
+#' @param mapping_ncbi Name of the mapping-file column holding NCBI
 #'   BioSample or SRA accessions (optional). Must not be the sample ID column.
 #'   Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
-#' @param fetch_biosample Fetch NCBI metadata for samples with a BioSample
+#' @param fetch_ncbi Fetch NCBI metadata for samples with a BioSample
 #'   value (default TRUE). Set FALSE when offline and run
-#'   [fetch_biosample()] later.
+#'   [fetch_ncbi()] later.
 #' @param link_sources Follow links between GEOME, GBIF, and NCBI records for
 #'   these samples (default FALSE). Linking also runs when the project setting
 #'   is on; this argument does not change the setting. See
@@ -36,8 +36,8 @@ update_sample_metadata <- function(
     fetch_geome = TRUE,
     mapping_gbif = "GBIF_ID",
     fetch_gbif = TRUE,
-    mapping_biosample = "BioSample",
-    fetch_biosample = TRUE,
+    mapping_ncbi = "BioSample",
+    fetch_ncbi = TRUE,
     link_sources = FALSE
     ){
 
@@ -67,7 +67,7 @@ update_sample_metadata <- function(
       ID = .data[[mapping_id]],
       Taxon = .data[[mapping_taxon]]
     )
-  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_biosample),
+  mapping <- .meta_take_cols(mapping, c(GEOME = mapping_geome, GBIF = mapping_gbif, NCBI = mapping_ncbi),
                               keep = c(mapping_id, mapping_taxon))
   # convert everything to characters
   mapping <- mapping |>
@@ -149,6 +149,6 @@ update_sample_metadata <- function(
       by = "ID"
     )
 
-  .meta_sync_changed(con, mapping, sample_table, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_biosample),
+  .meta_sync_changed(con, mapping, sample_table, list(GEOME = fetch_geome, GBIF = fetch_gbif, NCBI = fetch_ncbi),
                      link = isTRUE(link_sources) || .meta_link_enabled(con))
 }

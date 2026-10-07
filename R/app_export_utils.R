@@ -208,6 +208,23 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
       }
       return(list(ok = TRUE, level = "warn", message = msg))
     }
+    if (!is.null(data) && nrow(data) > 0) {
+      hdr <- stringr::str_glue_data(data, template)
+      dm <- unique(unlist(duplicate_modifiers(hdr)))
+      nm <- dm[gsub("_", "", dm) %in% c("specimenvoucher", "voucheruri")]
+      if (length(nm)) {
+        return(err(sprintf("Duplicate %s. NMNH records need each exactly once: take the other out.",
+                           paste0("[", nm, "=]", collapse = ", "))))
+      }
+      if (length(dm)) {
+        return(list(ok = TRUE, level = "warn", message = sprintf(
+          paste("Duplicate %s. NCBI accepts each modifier once: keep one",
+                "and take the other out."),
+          paste0("[", dm, "=]", collapse = ", "))))
+      }
+      mf <- missing_fields(template, data)
+      if (!is.null(mf)) return(list(ok = TRUE, level = "warn", message = mf))
+    }
     if (require_completeness && !grepl("\\{completeness\\}\\s*$", template)) {
       return(list(
         ok = TRUE, level = "warn",
@@ -225,12 +242,43 @@ validate_fasta_header <- function(template, data = NULL, require_completeness = 
     if (length(col) > 0) {
       name <- sub("object '([^']+)' not found", "\\1", col)
       return(err(sprintf(
-        '{%s} is not one of the available fields. See "Available columns" below.',
+        '{%s} is not one of the available fields. See "Available metadata" below.',
         name
       )))
     }
     # Fallback: strip glue's multi-line wrapper to the last informative line
     err(sub("^.*!\\s*", "", gsub("\n", " ", raw)))
+  })
+}
+
+#' Message naming header columns that some samples leave empty, or NULL
+#' @noRd
+missing_fields <- function(template, data) {
+  tok <- regmatches(template, gregexpr("\\{[^{}]*\\}", template))[[1]]
+  nm <- intersect(unique(substr(tok, 2L, nchar(tok) - 1L)), names(data))
+  nm <- nm[!startsWith(nm, "nmnh_")]
+  ids <- unique(data$ID)
+  out <- vapply(nm, function(n) {
+    v <- trimws(as.character(data[[n]]))
+    miss <- unique(data$ID[is.na(v) | !nzchar(v) | v == "NA"])
+    if (!length(miss)) return(NA_character_)
+    sprintf("{%s} for %d of %d sample(s) (%s)", n, length(miss), length(ids),
+            paste(utils::head(miss, 3), collapse = ", "))
+  }, character(1))
+  out <- out[!is.na(out)]
+  if (length(out)) {
+    paste0("Missing data in ", paste(out, collapse = "; "),
+           ". A [modifier=] with no value is left out of that sample's header.")
+  }
+}
+
+#' Names of the source modifiers used more than once in each header
+#' @noRd
+duplicate_modifiers <- function(headers) {
+  m <- regmatches(headers, gregexpr("\\[[^]=[]+=", headers))
+  lapply(m, function(x) {
+    nm <- gsub("[- ]", "_", tolower(trimws(substr(x, 2L, nchar(x) - 1L))))
+    unique(nm[duplicated(nm)])
   })
 }
 

@@ -1,8 +1,44 @@
-# MitoPilot (development version)
+# MitoPilot 1.5.9
+
+Released 2026-10-07. Container: `macguigand/mitopilot:1.5.9`
+
+## Breaking changes
+
+- **NCBI names.** The NCBI setup arguments are now `mapping_ncbi` and `fetch_ncbi` (were `mapping_biosample` and `fetch_biosample`), since they take SRA accessions as well as BioSamples. `fetch_biosample()` is now `fetch_ncbi()`, and its `biosamples` argument is now `ncbi_ids`. The mapping-file column still defaults to `BioSample`, and existing projects need no changes.
+
+## New Features
+
+- **Run reports.** After every Assemble or Annotate run, MitoPilot writes a plain-language report: the result, task counts, failed tasks with a likely cause (for example, out of memory), and samples that failed with their notes. This works for runs started in the app and for runs submitted to a cluster or run in the background from a saved script. A "New run reports available" message appears when new reports are ready, and the **Run Reports** button (next to **Work Dirs**) lists every run for the active panel. Click a run to read its report, copy it, or open its folder. Runs still in progress show live task progress read from the Nextflow log.
+- **Tidier run files.** Each run's submission script, scheduler log, Nextflow log, and report now share one name and live under a hidden `.runs/` folder in the project, instead of loose files in the project folder. Older projects keep working; their existing logs stay where they are.
+- **Test projects come with sample metadata.** `new_test_project()` and `new_test_project_userAsmb()` now fetch each sample's NCBI metadata from its SRA run and follow links to GBIF and GEOME.
+- **One window for metadata fields.** The **Metadata** button now picks both which metadata fields show as table columns (**Show**) and which can be used at export (**Export**), replacing the separate **Set Export Metadata** button. **Tick both together** sets both with one click, header boxes tick every row in view, **GenBank-ready** and **Ticked only** narrow the list, sample counts show gaps, and a click copies a field's template text. **Choose fields** in Export Data opens the same window filtered to that source.
+- **Copy sequence in the sequence viewers.** The Annotate sequence viewer and the MapToRef coverage viewer have a **Copy sequence** button that copies the bases currently in view as FASTA, at any zoom level. In MapToRef, the reference and consensus are copied as two records.
+- **NMNH user switch in Export Data.** Adds the `[specimen_voucher=]` and `[voucherURI=]` modifiers NMNH requires on GenBank submissions, fills them per sample from your mapping file, GBIF, NCBI, or GEOME, checks the voucher codes and EZIDs (a tissue EZID is replaced with its parent specimen), and reports samples that are missing or wrong. Fix them in the report or with a CSV upload. See `vignette("Specimen-Metadata")`.
+- **Sample metadata from the voucher report.** Click a sample ID in the NMNH voucher report to open its metadata, then return to the report. The metadata window now has a copy button on every value and **Export CSV** to save all of a sample's metadata.
+- **Non-NMNH samples and chosen fields in the voucher report.** Tick **Not NMNH** for samples that are not NMNH specimens: their voucher and URI are used as found, without NMNH checks, and they stay in the report so you can untick them. For any sample, pick the mapping-file column or metadata field its `specimen_voucher` or `voucherURI` comes from (**Choose fields** adds more).
+- **NMNH user is remembered per project.** Export Data opens with the switch as you last left it. The voucher report's field lists are sorted and offer **None** to leave a modifier out.
+- **Hydra setup runs automatically.** On the NMNH Hydra cluster, `library(MitoPilot)` and opening the app with `MitoPilot::MitoPilot()` run `hydra_setup()` when the job scheduler is not yet on `PATH`, so you no longer need to call it yourself.
+- **Empty source modifiers are left out of FASTA headers.** When a sample has no value for a `[modifier={field}]` in the header template, that modifier is dropped from its header instead of being written empty or as `NA`.
+- **Redesigned Export Data window.** Header templates and the available metadata sit side by side, each column scrolling on its own (stacked, with metadata in a bottom drawer, on narrow screens). Fields missing for some samples are underlined, and a live preview shows a real header example. 
+- **Header checks catch more problems.** Export warns when a header uses the same source modifier twice (NCBI accepts each once) and names header columns that are empty for some samples. Checks now look only at the chosen export group.
+- **BioSample and BioProject in FASTA headers.** The NCBI BioSample and BioProject fields now insert `[BioSample=]` and `[BioProject=]` source modifiers. New `ncbi_biosample_sra` and `ncbi_bioproject_sra` fields hold the values from the SRA record when a sample was linked through an SRA accession.
 
 ## Changes
 
+- **Linking to GBIF by voucher now follows Darwin Core standards.** When a GEOME or NCBI record has no Smithsonian EZID, MitoPilot searches GBIF for the specimen voucher in every field that can hold one (`specimen_voucher`, `genbankSpecimenVoucher`, `materialSampleID`, `voucherCatalogNumber`, `otherCatalogNumbers`, `bio_material`, or a bare catalog number with the institution code). It reads triplets, doublets, `urn:catalog:` prefixes, and `USNM 419933`-style spacing, no longer rejects the only match over a differing collection code, and skips GBIF occurrences copied from GenBank or BOLD.
+- `geome_specimen_voucher` uses `genbankSpecimenVoucher` when GEOME has it, and `gbif_specimen_voucher` drops a catalog number's leading repeat of the institution code.
+- In the metadata viewer's **Compare** tab, coordinates that match only within the 0.01 degree tolerance now show the status **agree (rounding)** instead of plain "agree". The values shown are always the original stored values.
 - The export's `sample_info.csv` has a new `ref_accession` column holding just the GenBank reference accession (blank when the reference was flagged as poor). It replaces the `ref_comparison` column and its "compared sample ... to GenBank accession ..." sentence.
+
+## Bug Fixes
+
+- NCBI metadata fetches ignored the project's `ncbi_api_key` and the `NCBI_API_KEY` environment variable, reading only `ENTREZ_KEY`, so they ran at the slower keyless rate. They now use the same key as BLAST and reference fetches.
+- Opening the app on a project with no extra mapping-file columns and no fetched GEOME, GBIF, or NCBI metadata (for example a fresh test project) failed with "replacement has 1 row, data has 0".
+
+**Note**
+Run [`MitoPilot::backwards_compatibility()`](https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html) on older projects to move the `container` line in `.config` to `macguigand/mitopilot:1.5.9`. Scripts that call `fetch_biosample()` or pass `mapping_biosample` or `fetch_biosample` need the new names.
+
+**Full Changelog**: https://github.com/Smithsonian/MitoPilot/compare/1.5.8...1.5.9
 
 # MitoPilot 1.5.8
 

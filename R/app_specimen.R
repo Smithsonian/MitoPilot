@@ -167,7 +167,7 @@ meta_record_view <- function(recs, source, box_id) {
       if (length(cit)) p(class = "mp-meta-citation", em(cit[1])),
       tags$table(class = "table table-sm",
         tags$tbody(lapply(seq_len(nrow(r)), function(j) {
-          tags$tr(tags$th(r$field[j]), tags$td(cell(r$field[j], r$value[j])))
+          tags$tr(tags$th(r$field[j]), tags$td(cell(r$field[j], r$value[j]), meta_copy_btn(r$value[j])))
         }))
       )
     )
@@ -176,6 +176,31 @@ meta_record_view <- function(recs, source, box_id) {
     div(style = "margin-bottom: 6px;", toggle("Expand all", TRUE), " ", toggle("Collapse all", FALSE)),
     div(id = box_id, style = "max-height: 50vh; overflow-y: auto;", cards)
   )
+}
+
+#' Small button that copies one value to the clipboard
+#' @noRd
+meta_copy_btn <- function(value) {
+  tags$button(
+    type = "button", class = "btn btn-link btn-xs mp-meta-copy", `data-v` = value,
+    title = "Copy value", `aria-label` = "Copy value",
+    onclick = paste0(
+      "navigator.clipboard.writeText(this.dataset.v); var i = this.querySelector('i');",
+      "i.className = 'fa-solid fa-check'; setTimeout(function() { i.className = 'fa-regular fa-copy'; }, 1000);"),
+    icon("copy", class = "fa-regular")
+  )
+}
+
+#' One sample's metadata as long rows: mapping-file columns, then every fetched record
+#' @noRd
+sample_metadata_long <- function(con, id) {
+  s <- DBI::dbGetQuery(con, "SELECT * FROM samples WHERE ID = ?", params = list(id))
+  cols <- c("Taxon", export_metadata_cols(names(s), character()))
+  m <- data.frame(source = "Mapping file", level = NA_character_, ref = NA_character_,
+                  field = cols, value = vapply(cols, function(k) as.character(s[[k]][1]), ""))
+  recs <- DBI::dbGetQuery(con, "SELECT source, level, ref, field, value FROM meta_records
+                                WHERE ID = ? ORDER BY source, depth", params = list(id))
+  cbind(ID = id, rbind(m, recs), row.names = NULL)
 }
 
 #' Compare tab table: one row per concept across the CSV and every source
@@ -193,13 +218,19 @@ specimen_compare_view <- function(cf) {
       r <- cf[i, ]
       cls <- if (identical(r$status, "conflict")) "mp-spec-conflict" else
         if (identical(r$status, "not checked")) "text-muted" else NULL
+      status <- r$status
+      if (identical(r$concept, "coordinates") && identical(status, "agree")) {
+        # agreement allows 0.01 degrees; flag values that are not identical
+        xy <- lapply(unlist(r[grep("_value$", names(r))]), .spec_parse_coords)
+        if (length(unique(Filter(Negate(is.null), xy))) > 1L) status <- "agree (rounding)"
+      }
       tags$tr(
         class = cls,
         tags$td(r$concept),
         tags$td(dash(r$csv_value),
                 if (!is.na(r$csv_column)) span(class = "text-muted", paste0(" (", r$csv_column, ")"))),
         lapply(names(META_SOURCES), function(s) tags$td(dash(r[[paste0(tolower(s), "_value")]]))),
-        tags$td(dash(r$status))
+        tags$td(dash(status))
       )
     }))
   )
@@ -244,55 +275,16 @@ specimen_csv_map_ui <- function(ns, current, overrides, choices) {
   )
 }
 
-#' Modal listing each source's fields available at export
-#'
-#' @param ns module namespace function
-#' @param summaries named list of `meta_field_summary()` output, one per source
-#' @param closed_input namespaced input id set when the modal closes, however
-#'   it closes; NULL to skip
-#' @noRd
-specimen_fields_modal <- function(ns, summaries, closed_input = NULL) {
-  section <- function(source, s) {
-    key <- tolower(source)
-    combos <- s[s$kind == "combo", ]
-    tagList(
-      h4(source),
-      h5("GenBank-ready combinations"),
-      checkboxGroupInput(
-        ns(paste0(key, "_combos")), NULL, width = "100%",
-        choiceValues = combos$key, selected = combos$key[combos$selected],
-        choiceNames = lapply(seq_len(nrow(combos)), function(i) tagList(
-          code(paste0("{", combos$col[i], "}")), " from ", combos$field[i], ": ",
-          if (is.na(combos$example[i])) em("no samples") else
-            tagList(tags$samp(combos$example[i]), sprintf(" (%d samples)", combos$n_samples[i]))
-        ))
-      ),
-      h5(paste("All", source, "fields")),
-      reactable::reactableOutput(ns(paste0(key, "_raw")))
-    )
-  }
-  modalDialog(
-    title = mp_modal_title("Metadata fields for export",
-                           "Ticked fields become columns you can use in header templates"),
-    size = "l", easyClose = TRUE,
-    lapply(seq_along(summaries), function(i) tagList(
-      if (i > 1) tags$hr(), section(names(summaries)[i], summaries[[i]]))),
-    if (!is.null(closed_input)) {
-      tags$script(HTML(sprintf(
-        "$('#shiny-modal').one('hidden.bs.modal', function() { Shiny.setInputValue('%s', Date.now(), {priority: 'event'}); });",
-        closed_input)))
-    },
-    footer = mp_footer(primary = actionButton(ns("specimen_fields_save"), "Save"), dismiss = "Cancel")
-  )
-}
-
 #' Specimen metadata viewer: GEOME, GBIF, NCBI, and Compare tabs
 #'
 #' @param id module id
 #' @param open reactive yielding the sample ID to open (from a `specimen_open` input)
 #' @param on_change function called after any DB write, so the caller can refresh its table
+#' @param on_back optional function for a footer button that returns to the caller's modal
+#' @param back_label label for that button
 #' @noRd
-specimen_viewer_server <- function(id, open, on_change = function() NULL) {
+specimen_viewer_server <- function(id, open, on_change = function() NULL,
+                                   on_back = NULL, back_label = "Back") {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     con <- session$userData$con
@@ -326,9 +318,10 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
       modalDialog(
         title = mp_modal_title(
           tagList("Sample metadata: ", textOutput(ns("hdr_id"), inline = TRUE)),
-          subtitle = tagList("Taxon: ", textOutput(ns("hdr_taxon"), inline = TRUE))
+          subtitle = tagList("Taxon: ", textOutput(ns("hdr_taxon"), inline = TRUE)),
+          close = is.null(on_back)
         ),
-        size = "l", easyClose = TRUE,
+        size = "l", easyClose = is.null(on_back),
         fluidRow(
           column(3,
             selectInput(ns("sample"), "Sample", choices = stats::setNames(s$ID, lab),
@@ -381,14 +374,26 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
           )
         ),
         footer = mp_footer(
-          extra = actionButton(ns("refresh_all"), "Refresh all",
-                               title = "Fetch every sample's GEOME, GBIF, and NCBI records again"),
-          dismiss = "Close"
+          extra = tagList(
+            downloadButton(ns("csv"), "Export CSV", class = "btn-default",
+                           title = "Save every metadata field for this sample as a CSV file"),
+            actionButton(ns("refresh_all"), "Refresh all",
+                         title = "Fetch every sample's GEOME, GBIF, and NCBI records again")
+          ),
+          primary = if (!is.null(on_back)) actionButton(ns("back"), back_label, icon = icon("arrow-left")),
+          dismiss = if (is.null(on_back)) "Close"
         )
       ) |> showModal()
     })
 
     observeEvent(input$sample, rv$id <- input$sample, ignoreInit = TRUE)
+    if (!is.null(on_back)) observeEvent(input$back, on_back())
+    output$csv <- downloadHandler(
+      filename = function() paste0(rv$id, "_metadata.csv"),
+      content = function(file) {
+        utils::write.csv(sample_metadata_long(con, rv$id), file, row.names = FALSE, na = "")
+      }
+    )
 
     output$hdr_id <- renderText(rv$id)
     output$hdr_taxon <- renderText({
@@ -464,7 +469,8 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
         val <- .meta_set_ref(con, source, rv$id, ref)
         if (!is.na(val)) {
           withProgress(message = paste("Fetching from", source), {
-            res <- suppressWarnings(.meta_fetch_into(con, source, rv$id, val, link = .meta_link_enabled(con)))
+            res <- suppressWarnings(.meta_fetch_into(con, source, rv$id, val, link = .meta_link_enabled(con),
+              verbose = FALSE))
           })
           if (res$status == "failed") showNotification(res$message, type = "warning")
         }
@@ -524,7 +530,7 @@ specimen_viewer_server <- function(id, open, on_change = function() NULL) {
         withProgress(message = "Fetching specimen records", value = 0, {
           for (i in seq_len(nrow(jobs))) {
             suppressWarnings(.meta_fetch_into(con, jobs$source[i], jobs$ID[i], jobs$ref[i],
-                                              caches[[jobs$source[i]]]))
+                                              caches[[jobs$source[i]]], verbose = FALSE))
             incProgress(1 / nrow(jobs), detail = paste(jobs$ID[i], jobs$source[i]))
           }
           if (.meta_link_enabled(con)) {

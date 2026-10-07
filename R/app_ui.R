@@ -105,16 +105,17 @@ app_ui <- function(request) {
                 needs_selection = TRUE
               ),
               mp_toolbar_button(
-                "specimen_fields", "Set Export Metadata",
-                title = "Choose which GEOME, GBIF, and NCBI fields are available at export"
-              ),
-              mp_toolbar_button(
                 "export", "Export Data",
                 emphasis = "primary",
                 title = "Open the export window for the selected assemblies"
               )
             ),
-            workdir_browser_ui("workdir_browser")
+            div(
+              class = "mp-toolbar",
+              style = "margin-left: auto;",
+              run_reports_ui("run_reports"),
+              workdir_browser_ui("workdir_browser")
+            )
           )
         ),
         tags$main(

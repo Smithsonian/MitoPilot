@@ -28,6 +28,7 @@ app_server_userAsmb <- function(input, output, session) {
   # migration is not run automatically here.
   gaps <- schema_gaps(session$userData$con)
   if (length(gaps) > 0) {
+    output$app_header <- renderUI(mp_app_header(session$userData$dir, gaps = gaps))
     mp_alert(
       title = "Project database needs updating",
       text = shiny::tags$div(
@@ -81,6 +82,7 @@ app_server_userAsmb <- function(input, output, session) {
       html = TRUE,
       type = "info"
     )
+    session$userData$startup_alert <- TRUE
   }
 
   # Publish / output directory ----
@@ -116,6 +118,7 @@ app_server_userAsmb <- function(input, output, session) {
         html = TRUE,
         type = "warning"
       )
+      session$userData$startup_alert <- TRUE
     }
   }, error = function(e) NULL)
 
@@ -141,23 +144,11 @@ app_server_userAsmb <- function(input, output, session) {
   session$userData$gcode <- Biostrings::getGeneticCode(session$userData$genetic_code)
 
   # Orientation line: app, version, project (full path on hover), workflow, Help.
-  output$app_header <- renderUI({
-    proj <- normalizePath(session$userData$dir, mustWork = FALSE)
-    div(
-      class = "mp-header",
-      tags$span(class = "mp-app-name", "MitoPilot"),
-      tags$span(class = "mp-app-ver", paste0("v", utils::packageVersion("MitoPilot"))),
-      tags$span(class = "mp-proj", title = proj, basename(proj)),
-      tags$span(
-        class = "mp-badge",
-        if (isTRUE(session$userData$no_raw_data)) "User assemblies, no reads" else "User assemblies"
-      ),
-      tags$a(
-        class = "mp-help", href = "https://smithsonian.github.io/MitoPilot/",
-        target = "_blank", rel = "noopener", "Help"
-      )
-    )
-  })
+  output$app_header <- renderUI(mp_app_header(
+    session$userData$dir,
+    badge = if (isTRUE(session$userData$no_raw_data)) "User assemblies, no reads" else "User assemblies"
+  ))
+
 
   # View mode ----
   observeEvent(input$mode, {
@@ -206,9 +197,6 @@ app_server_userAsmb <- function(input, output, session) {
   observeEvent(input$clear_group, {
     trigger("clear_group")
   })
-  observeEvent(input$specimen_fields, {
-    trigger("specimen_fields")
-  })
   observeEvent(input$export, {
     trigger("export")
   })
@@ -231,4 +219,5 @@ app_server_userAsmb <- function(input, output, session) {
   annotate_server("annotate")
   export_server("export")
   workdir_browser_server("workdir_browser")
+  run_reports_server("run_reports")
 }

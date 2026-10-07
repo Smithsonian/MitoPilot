@@ -3,12 +3,13 @@
 #' Looks up each sample's NCBI BioSample, directly or through an SRA accession
 #' (SRR/ERR/DRR run, SRX experiment, or SRS sample), plus the BioProject(s) it
 #' belongs to, and stores everything in the project database for viewing in
-#' the app and use at export. Set the environment variable `ENTREZ_KEY` to an
-#' NCBI API key for faster lookups.
+#' the app and use at export. Lookups are faster with an NCBI API key: the
+#' project's `ncbi_api_key` (set in [new_project()]), or else the
+#' `NCBI_API_KEY` or `ENTREZ_KEY` environment variable.
 #'
 #' @param path Path to the project directory (default = current working directory)
 #' @param ids Sample IDs to fetch. Default: every sample with a BioSample value.
-#' @param biosamples Optional BioSample or SRA accessions to set for `ids` first
+#' @param ncbi_ids Optional BioSample or SRA accessions to set for `ids` first
 #'   (same length as `ids`). A blank value removes that sample's BioSample and
 #'   its NCBI data.
 #' @param link_sources Follow links to GEOME, GBIF, or NCBI records named in the
@@ -16,6 +17,6 @@
 #'   uses the project setting.
 #' @return Invisibly, a data frame of `ID`, `status`, and `message`.
 #' @export
-fetch_biosample <- function(path = ".", ids = NULL, biosamples = NULL, link_sources = NULL) {
-  .meta_fetch_project(path, "NCBI", ids, biosamples, link = link_sources)
+fetch_ncbi <- function(path = ".", ids = NULL, ncbi_ids = NULL, link_sources = NULL) {
+  .meta_fetch_project(path, "NCBI", ids, ncbi_ids, link = link_sources)
 }

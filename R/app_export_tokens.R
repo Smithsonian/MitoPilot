@@ -4,6 +4,18 @@ EXPORT_TOKEN_REFERENCE <- c("blast_accession", "blast_ref_status", "blast_specie
 EXPORT_TOKEN_ASSEMBLY <- c("length", "structure", "PCGCount", "tRNACount", "rRNACount", "ORFCount",
                            "missing", "extra", "warnings", "partial", "curate_opts")
 
+#' Header-template text a metadata key inserts: `{col}` for a raw key, or
+#' `[mod={col}]` for a combo (mod defaults to the combo name)
+#' @noRd
+meta_export_token <- function(keys) {
+  vapply(keys, function(k) {
+    col <- .meta_key_col(k)
+    p <- strsplit(k, ":", fixed = TRUE)[[1]]
+    if (p[2] != "combo") paste0("{", col, "}")
+    else paste0("[", .meta_combos(p[1])[[p[3]]]$mod %||% p[3], "={", col, "}]")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 #' Group the columns usable in a header template for the Export Data modal
 #'
 #' @param data rows about to be exported (first row supplies the hover example;
@@ -43,21 +55,21 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
     keys <- keys[keep]
     cols <- cols[keep]
     ticked <- if (length(cols)) {
-      combo <- grepl(":combo:", keys, fixed = TRUE)
-      label <- sub("^[^:]+:combo:", "", keys)
-      combo <- combo & !vapply(label, function(l) isTRUE(.meta_combos(prefix)[[l]]$plain), logical(1))
-      tok(cols, ifelse(combo, paste0("[", label, "={", cols, "}]"), paste0("{", cols, "}")))
+      tok(cols, meta_export_token(keys))
     } else {
       tok(character(), character())
     }
-    list(tokens = rbind(plain(id_col), ticked), n = nrow(ticked))
+    # the ID column joins its database group only when that group is in use;
+    # otherwise it stays with the mapping columns
+    list(tokens = if (nrow(ticked)) rbind(plain(id_col), ticked) else ticked,
+         n = nrow(ticked), id = if (nrow(ticked)) id_col)
   }
-  pick_hint <- "Nothing ticked yet. Use Set Export Metadata in the Export toolbar to add fields."
+  pick_hint <- "Nothing ticked yet. Use Choose fields, or the Export column of the Metadata button."
   csv <- setdiff(export_metadata_cols(sample_cols, character()), EXPORT_TOKEN_BASICS)
   geome <- meta("geome", "GEOME_BCID")
   gbif <- meta("gbif", "GBIF_ID")
   ncbi <- meta("ncbi", "BioSample")
-  csv_tokens <- plain(csv)
+  csv_tokens <- plain(setdiff(csv, c(geome$id, gbif$id, ncbi$id)))
   list(
     Basics = list(open = TRUE, tokens = plain(EXPORT_TOKEN_BASICS), hint = NULL),
     `Your mapfile columns` = list(
@@ -72,6 +84,15 @@ export_token_groups <- function(data, sample_cols, ticked_keys) {
     `Reference (BLAST)` = list(open = FALSE, tokens = plain(EXPORT_TOKEN_REFERENCE), hint = NULL),
     `Assembly and annotation` = list(open = FALSE, tokens = plain(EXPORT_TOKEN_ASSEMBLY), hint = NULL)
   )
+}
+
+#' Summary line for the Available metadata panel, with the field count
+#' @noRd
+meta_panel_summary <- function(groups, help = NULL) {
+  n <- sum(vapply(groups, function(x) nrow(x$tokens), integer(1)))
+  tags$summary(icon("database"), " Available metadata",
+               if (n) span(class = "mp-meta-count", sprintf(" (%d fields)", n)),
+               if (!is.null(help)) mp_help_tip(help, label = "Available metadata"))
 }
 
 #' Clickable token chips for the Export Data modal
@@ -92,8 +113,9 @@ export_token_ui <- function(groups, target_id, ns, totals = "{}") {
         tagList(" ", actionLink(ns(paste0("token_fields_", tolower(g))), "Choose fields"))
       }
       tags$details(
-        open = if (isTRUE(x$open)) NA else NULL, class = "mp-token-group",
-        tags$summary(g, link),
+        open = if (isTRUE(x$open)) NA else NULL,
+        class = paste0("mp-token-group mp-src-", token_src_slug(g)),
+        tags$summary(span(class = "mp-src-dot"), g, link),
         if (!is.null(x$hint)) p(class = "text-muted mp-token-hint", x$hint),
         div(class = "mp-token-chips", lapply(seq_len(nrow(x$tokens)), function(i) {
           tip <- paste0("Inserts ", x$tokens$insert[i],
@@ -107,4 +129,49 @@ export_token_ui <- function(groups, target_id, ns, totals = "{}") {
       )
     })
   )
+}
+
+#' Colour key for a token group in the Available metadata panel
+#' @noRd
+token_src_slug <- function(group) {
+  switch(group, Basics = "basic", GEOME = "geome", GBIF = "gbif", NCBI = "ncbi",
+         if (grepl("map", group, ignore.case = TRUE)) "mapfile" else "pipeline")
+}
+
+#' Live preview of a FASTA header template for the first record of `data`
+#' @noRd
+hdr_preview_ui <- function(template, data) {
+  if (is.null(template) || !nzchar(trimws(template))) {
+    return(span(class = "text-muted", "Empty header."))
+  }
+  if (is.null(data) || !nrow(data)) return(span(class = "text-muted", "No records in this group."))
+  row <- data[1, , drop = FALSE]
+  parts <- regmatches(template, gregexpr("\\{[^{}]*\\}", template), invert = NA)[[1]]
+  # one string, since the box keeps whitespace and tag indentation would show
+  body <- vapply(parts[nzchar(parts)], function(p) {
+    if (!grepl("^\\{[^{}]*\\}$", p)) return(htmltools::htmlEscape(p))
+    v <- tryCatch(as.character(stringr::str_glue_data(row, p)), error = function(e) NULL)
+    tok <- if (is.null(v)) {
+      span(class = "mp-hl-tok mp-hl-bad", `data-tok` = p, title = "Unknown field", p)
+    } else if (!length(v) || is.na(v) || !nzchar(v) || v == "NA") {
+      span(class = "mp-hl-tok mp-hl-empty", `data-tok` = p, title = p, "(empty)")
+    } else {
+      span(class = "mp-hl-tok", `data-tok` = p, title = p, v)
+    }
+    as.character(tok)
+  }, character(1))
+  div(class = "mp-hdr-preview-body", title = paste("First record:", row$ID[1]),
+      HTML(paste(body, collapse = "")))
+}
+
+#' Plain-language line saying where NMNH values came from
+#' @noRd
+nmnh_source_text <- function(src) {
+  tab <- table(factor(src[!is.na(src)], levels = unique(src[!is.na(src)])))
+  miss <- sum(is.na(src))
+  if (!length(tab)) {
+    return("not found yet. Add GBIF, NCBI, or GEOME IDs to your samples, or pick a mapping file column below.")
+  }
+  paste0("from ", paste(sprintf("%s (%d)", nmnh_source_label(names(tab)), tab), collapse = ", "),
+         if (miss) sprintf("; missing for %d", miss), ".")
 }

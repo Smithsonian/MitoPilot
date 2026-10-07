@@ -19,10 +19,10 @@ test_that(".meta_ensure_tables adds a BioSample column", {
   expect_true("BioSample" %in% DBI::dbListFields(con, "samples"))
 })
 
-test_that("fetch_biosample sets IDs and stores records", {
+test_that("fetch_ncbi sets IDs and stores records", {
   local_mocked_bindings(.ncbi_get = ncbi_fixture_get)
   dir <- ncbi_proj()
-  res <- fetch_biosample(dir, ids = "s2", biosamples = "samn63236902")
+  res <- fetch_ncbi(dir, ids = "s2", ncbi_ids = "samn63236902")
   expect_equal(res$status, "ok")
   expect_equal(q(dir, "SELECT BioSample FROM samples WHERE ID = 's2'")$BioSample, "SAMN63236902")
   r <- q(dir, "SELECT DISTINCT level FROM meta_records WHERE ID = 's2' AND source = 'NCBI'")
@@ -32,10 +32,10 @@ test_that("fetch_biosample sets IDs and stores records", {
 test_that("a failed refresh keeps earlier NCBI data", {
   local_mocked_bindings(.ncbi_get = ncbi_fixture_get)
   dir <- ncbi_proj()
-  fetch_biosample(dir, ids = "s2", biosamples = "SAMN63236902")
+  fetch_ncbi(dir, ids = "s2", ncbi_ids = "SAMN63236902")
   n <- q(dir, "SELECT COUNT(*) n FROM meta_records WHERE ID = 's2'")$n
   local_mocked_bindings(.ncbi_get = function(...) stop("could not reach NCBI (offline)", call. = FALSE))
-  expect_warning(fetch_biosample(dir, ids = "s2"), "offline")
+  expect_warning(fetch_ncbi(dir, ids = "s2"), "offline")
   expect_equal(q(dir, "SELECT COUNT(*) n FROM meta_records WHERE ID = 's2'")$n, n)
 })
 
@@ -63,11 +63,11 @@ ncbi_mapping <- function(dir) {
 
 test_that("check_mapping validates BioSample values and refuses the ID column", {
   m <- data.frame(ID = c("SRR21844202", "s2"), Taxon = "x", R1 = "a", R2 = "b")
-  iss <- check_mapping(m, mapping_biosample = "ID")
+  iss <- check_mapping(m, mapping_ncbi = "ID")
   expect_match(paste(iss$errors, collapse = " "), "can't also be the NCBI ID column", fixed = TRUE)
   iss2 <- check_mapping(cbind(m, BioSample = c("SAMN1", "junk")))
   expect_match(paste(iss2$warnings, collapse = " "), "not a BioSample or SRA accession for s2", fixed = TRUE)
-  iss3 <- check_mapping(m, mapping_biosample = "Nope")
+  iss3 <- check_mapping(m, mapping_ncbi = "Nope")
   expect_match(paste(iss3$errors, collapse = " "), "Nope")
 })
 
@@ -81,10 +81,10 @@ test_that("new_db stores BioSample from its column and fetches it", {
   expect_equal(q(d, "SELECT ID, status FROM meta_status WHERE source = 'NCBI'")$status, "ok")
 })
 
-test_that("new_db fetch_biosample = FALSE stores IDs without calling NCBI", {
+test_that("new_db fetch_ncbi = FALSE stores IDs without calling NCBI", {
   local_mocked_bindings(.ncbi_get = function(...) stop("should not be called"))
   d <- withr::local_tempdir()
-  new_db(db_path = file.path(d, ".sqlite"), mapping_fn = ncbi_mapping(d), fetch_biosample = FALSE)
+  new_db(db_path = file.path(d, ".sqlite"), mapping_fn = ncbi_mapping(d), fetch_ncbi = FALSE)
   expect_equal(q(d, "SELECT COUNT(*) n FROM meta_status")$n, 0L)
 })
 

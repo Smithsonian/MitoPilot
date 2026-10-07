@@ -6,16 +6,42 @@ window.MP_SAMPLE_TABLES =
 
 // One help affordance: every [data-toggle="mp-popover"] on the page (modals
 // and dynamically rendered UI included) opens its data-content in a
-// Bootstrap 3 popover on click or keyboard focus. Delegated, so it needs no
-// per-widget initialisation.
+// Bootstrap 3 popover on click. Opened and closed by hand, one at a time: a
+// click elsewhere, Escape, scrolling, a modal opening or closing, or the icon
+// being re-rendered away closes it, so none is left stranded on screen.
 $( document ).ready(function(){
   if (!$.fn.popover) return;
-  $(document.body).popover({
-    selector: '[data-toggle="mp-popover"]',
-    trigger: 'click focus',
-    placement: 'auto right',
-    container: 'body',
-    html: true
+  var open = null;
+  window.mpHidePopovers = function() {
+    if (open) {
+      $(open).attr('aria-expanded', 'false').popover('destroy');
+      open = null;
+    }
+    $('body > .popover').remove();
+  };
+  $(document).on('click', '[data-toggle="mp-popover"]', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var el = this, again = open === el;
+    mpHidePopovers();
+    if (again) return;
+    $(el).popover({ trigger: 'manual', placement: 'auto right', container: 'body', html: true })
+      .popover('show').attr('aria-expanded', 'true');
+    open = el;
+  });
+  $(document).on('click', function(e) {
+    if (open && !$(e.target).closest('.popover, [data-toggle="mp-popover"]').length) mpHidePopovers();
+  });
+  $(document).on('keydown', function(e) {
+    if (e.key === 'Escape' && open) mpHidePopovers();
+  });
+  document.addEventListener('scroll', function(e) {
+    var t = e.target;
+    if (open && !(t.closest && t.closest('.popover'))) mpHidePopovers();
+  }, true);
+  $(document).on('show.bs.modal hide.bs.modal', function() { mpHidePopovers(); });
+  $(document).on('shiny:value', function() {
+    setTimeout(function() { if (open && !document.body.contains(open)) mpHidePopovers(); }, 50);
   });
 });
 
@@ -234,6 +260,7 @@ function mpTokenFlags(modal) {
     $(this).toggleClass('mp-token-missing', m > 0);
     this.title = m > 0 ? base + '\nMissing for ' + m + ' of ' + n + ' records in this group' : base;
   });
+  modal.find('textarea.mp-hl').each(function() { mpHlRender(this); });
 }
 $(document).on('change', 'select[id$="export_group"]', function() {
   mpTokenFlags($(this).closest('.modal'));
@@ -247,3 +274,76 @@ $(document).on('input', '.mp-token-filter', function() {
   });
   if (q) list.find('details').attr('open', '');
 });
+
+// Header boxes: a backdrop behind each transparent textarea draws a coloured
+// pill under every {field}, keyed by the Available metadata group it is in.
+function mpTokMap(modal) {
+  var m = {};
+  modal.find('.mp-token-group').each(function() {
+    var src = (this.className.match(/mp-src-(\w+)/) || [])[1] || 'other';
+    $(this).find('.mp-token-chip').each(function() {
+      var miss = this.classList.contains('mp-token-missing');
+      (this.getAttribute('data-insert').match(/\{[^{}]*\}/g) || []).forEach(function(t) {
+        if (!(t in m)) m[t] = {src: src, miss: miss};
+      });
+    });
+  });
+  return m;
+}
+function mpTokSrc(map, t) {
+  var src = /^\{nmnh_/.test(t) ? 'nmnh' : t === '{completeness}' ? 'completeness' : (map[t] ? map[t].src : 'other');
+  return 'mp-src-' + src + (map[t] && map[t].miss ? ' mp-hl-miss' : '');
+}
+function mpHlRender(box) {
+  var back = box.previousElementSibling;
+  if (!back || !back.classList.contains('mp-hl-back')) return;
+  var cs = getComputedStyle(box);
+  ['fontFamily', 'fontSize', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingBottom',
+   'paddingLeft', 'borderTopWidth', 'borderBottomWidth', 'borderLeftWidth', 'borderRightWidth'
+  ].forEach(function(k) { back.style[k] = cs[k]; });
+  var sb = Math.max(0, box.offsetWidth - box.clientWidth - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth));
+  back.style.paddingRight = (parseFloat(cs.paddingRight) + sb) + 'px';
+  var map = mpTokMap($(box).closest('.modal'));
+  var esc = box.value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  back.innerHTML = esc
+    .replace(/\[[^\[\]{}=]*=/g, '<span class="mp-hl-mod">$&</span>')
+    .replace(/\{[^{}]*\}/g, function(t) { return '<mark class="' + mpTokSrc(map, t) + '">' + t + '</mark>'; }) + '\n';
+  back.scrollTop = box.scrollTop;
+}
+function mpHlInit(modal) {
+  modal.find('textarea.mp-hl').each(function() {
+    if (!this.previousElementSibling || !this.previousElementSibling.classList.contains('mp-hl-back')) {
+      $(this).wrap('<div class="mp-hl-wrap"></div>').before('<div class="mp-hl-back" aria-hidden="true"></div>');
+    }
+    mpHlRender(this);
+  });
+  var open = true;
+  try { open = localStorage.getItem('mpHdrPreview') !== '0'; } catch (e) {}
+  modal.find('details.mp-hdr-preview').prop('open', open);
+  // narrow windows: the metadata drawer starts folded
+  if (window.matchMedia('(max-width: 819px)').matches) {
+    modal.find('.mp-export-side details.mp-meta-panel').prop('open', false);
+  }
+}
+$(document).on('shown.bs.modal', function(e) { mpHlInit($(e.target)); });
+$(document).on('input change focus mouseup', 'textarea.mp-hl', function() { mpHlRender(this); });
+document.addEventListener('scroll', function(e) {
+  if (e.target.classList && e.target.classList.contains('mp-hl')) mpHlRender(e.target);
+}, true);
+document.addEventListener('toggle', function(e) {
+  if (!e.target.classList || !e.target.classList.contains('mp-hdr-preview')) return;
+  try { localStorage.setItem('mpHdrPreview', e.target.open ? '1' : '0'); } catch (err) {}
+}, true);
+$(document).on('shiny:value', function(e) {
+  if (!/_preview$/.test(e.name)) return;
+  setTimeout(function() {
+    var el = $(document.getElementById(e.name));
+    var map = mpTokMap(el.closest('.modal'));
+    el.find('.mp-hl-tok[data-tok]').each(function() {
+      this.className += ' ' + mpTokSrc(map, this.getAttribute('data-tok'));
+    });
+  }, 0);
+});
+
+// A "?" inside a <summary> opens its popover without folding the section
+$(document).on('click', 'summary .mp-help-icon', function(e) { e.preventDefault(); });

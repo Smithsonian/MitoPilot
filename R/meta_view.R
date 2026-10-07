@@ -26,10 +26,12 @@ META_VIEW_ANCHORS <- c("time_stamp", "assemble_notes", "annotate_notes", "export
 #' Every metadata field with data, in display order, with its shown state
 #'
 #' @param con database connection
-#' @return data.frame: source, key, level, field, n_samples, example, col, shown
+#' @return data.frame: source, key, level, field, n_samples, n_total, example,
+#'   col, shown, export (NA for map file fields), token
 #' @noRd
 meta_view_fields <- function(con) {
   st <- .meta_view_stored(con)
+  st <- st[!startsWith(st$key, "opt:"), ]
   mc <- .meta_view_map_cols(con)
   map <- if (length(mc)) {
     s <- DBI::dbGetQuery(con, paste0("SELECT ",
@@ -49,15 +51,21 @@ meta_view_fields <- function(con) {
                n_samples = s$n_samples, example = s$example, col = paste0("mv_", s$col))
   })
   out <- do.call(rbind, c(list(map), specimen))
-  if (is.null(out)) {
+  if (!is.null(out)) out <- out[out$n_samples > 0, ]
+  if (is.null(out) || !nrow(out)) {
     return(data.frame(source = character(), key = character(), level = character(),
-                      field = character(), n_samples = integer(), example = character(),
-                      col = character(), shown = logical()))
+                      field = character(), n_samples = integer(), n_total = integer(),
+                      example = character(), col = character(), shown = logical(),
+                      export = logical(), token = character()))
   }
-  out <- out[out$n_samples > 0, ]
   out$col <- make.unique(out$col, sep = "_")
   saved <- stats::setNames(st$shown == 1, st$key)[out$key]
   out$shown <- ifelse(is.na(saved), out$source == "Map file", saved)
+  out$n_total <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM samples")$n
+  is_map <- out$source == "Map file"
+  out$export <- ifelse(is_map, NA, out$key %in% DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key)
+  out$token <- paste0("{", out$field, "}")
+  if (any(!is_map)) out$token[!is_map] <- meta_export_token(out$key[!is_map])
   rownames(out) <- NULL
   out
 }
@@ -65,18 +73,26 @@ meta_view_fields <- function(con) {
 #' Save which metadata fields are shown, and the wrap setting
 #'
 #' Map file fields are stored when hidden, source fields when shown, so a
-#' new map file column appears and a newly fetched field stays off.
+#' new map file column appears and a newly fetched field stays off. When
+#' `export_keys` is given, the export fields are replaced too, keeping ticked
+#' keys that `fields` does not list (no data yet).
 #' @noRd
-meta_view_save <- function(con, fields, shown_keys, wrap) {
+meta_view_save <- function(con, fields, shown_keys, wrap, export_keys = NULL, link = meta_view_link(con)) {
   .meta_view_ensure(con)
   is_map <- fields$source == "Map file"
   on <- fields$key %in% shown_keys
   keep <- (is_map & !on) | (!is_map & on)
-  rows <- data.frame(key = c(fields$key[keep], "opt:wrap"),
-                     shown = c(as.integer(on[keep]), as.integer(isTRUE(wrap))))
+  rows <- data.frame(key = c(fields$key[keep], "opt:wrap", "opt:link"),
+                     shown = c(as.integer(on[keep]), as.integer(isTRUE(wrap)), as.integer(isTRUE(link))))
   DBI::dbWithTransaction(con, {
     DBI::dbExecute(con, "DELETE FROM meta_view_fields")
     DBI::dbAppendTable(con, "meta_view_fields", rows)
+    if (!is.null(export_keys)) {
+      old <- DBI::dbGetQuery(con, "SELECT key FROM meta_export_fields")$key
+      keys <- unique(c(setdiff(old, fields$key), intersect(export_keys, fields$key[!is_map])))
+      DBI::dbExecute(con, "DELETE FROM meta_export_fields")
+      if (length(keys)) DBI::dbAppendTable(con, "meta_export_fields", data.frame(key = keys))
+    }
   })
   invisible(NULL)
 }
@@ -84,6 +100,13 @@ meta_view_save <- function(con, fields, shown_keys, wrap) {
 meta_view_wrap <- function(con) {
   st <- .meta_view_stored(con)
   isTRUE(st$shown[st$key == "opt:wrap"][1] == 1)
+}
+
+#' "Tick both together" setting, on unless turned off
+#' @noRd
+meta_view_link <- function(con) {
+  st <- .meta_view_stored(con)
+  !isTRUE(st$shown[st$key == "opt:link"][1] == 0)
 }
 
 #' Add the shown metadata columns to a table's data, before its notes and

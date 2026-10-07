@@ -114,7 +114,11 @@ export_server <- function(id) {
 
     specimen_viewer_server("specimen", open = reactive(input$specimen_open),
                         on_change = function() trigger("refresh_export"))
-    meta_view_setup(input, output, session)
+    specimen_viewer_server("nmnh_spec", open = reactive(input$nmnh_meta_open),
+                           on_change = function() trigger("refresh_export"),
+                           on_back = function() nmnh_show_report(),
+                           back_label = "Back to voucher report")
+    meta_view_open <- meta_view_setup(input, output, session)
     fetch_data <- function() meta_view_join(fetch_export_data(), session$userData$con)
 
     # Prepare data ----
@@ -220,68 +224,28 @@ export_server <- function(id) {
     # stop re-rendering it after the first pass.
     outputOptions(output, "col_css", suspendWhenHidden = FALSE)
 
-    meta_fields_ver <- reactiveVal(0L)
-
-    # Specimen field picker ----
-    raw_fields_table <- function(raw) {
-      reactable::reactable(
-        raw[, c("level", "field", "n_samples", "example", "col")],
-        selection = "multiple", onClick = "select", compact = TRUE, searchable = TRUE,
-        defaultSelected = which(raw$selected), defaultPageSize = 10,
-        columns = list(
-          level = colDef(name = "Level"), field = colDef(name = "Field"),
-          n_samples = colDef(name = "Samples", width = 80),
-          example = colDef(name = "Example", cell = rt_longtext(), html = TRUE),
-          col = colDef(name = "Template token", cell = function(v) paste0("{", v, "}"))
-        )
-      )
-    }
-    init("specimen_fields")
     # Choose fields in Export Data: keep what is on screen, so closing the
-    # fields modal can reopen Export Data as it was.
-    snap_export <- function() {
+    # Metadata modal can reopen Export Data as it was.
+    take_snap <- function() {
       rv$export_snap <- lapply(stats::setNames(nm = c(
         "export_group", "template_select", "fasta_header", "fasta_header_gene",
         "include_alignments", "export_genes", "review_outliers", "start_aa",
         "stop_aa", "ident_pct")), function(id) input[[id]])
-      trigger("specimen_fields")
     }
-    observeEvent(input$token_fields_geome, snap_export())
-    observeEvent(input$token_fields_gbif, snap_export())
-    observeEvent(input$token_fields_ncbi, snap_export())
-    observeEvent(input$specimen_fields_closed, {
+    snap_export <- function(source) {
+      take_snap()
+      meta_view_open(source, closed_input = ns("meta_view_closed"))
+    }
+    observeEvent(input$token_fields_geome, snap_export("GEOME"))
+    observeEvent(input$token_fields_gbif, snap_export("GBIF"))
+    observeEvent(input$token_fields_ncbi, snap_export("NCBI"))
+    observeEvent(input$meta_view_closed, {
       req(rv$export_snap)
       trigger("export")
-    })
-    on("specimen_fields", {
-      con <- session$userData$con
-      sm <- lapply(stats::setNames(nm = names(META_SOURCES)), function(s) meta_field_summary(con, s))
-      closed <- if (!is.null(rv$export_snap)) ns("specimen_fields_closed")
-      showModal(specimen_fields_modal(ns, sm, closed_input = closed))
-      for (s in names(sm)) local({
-        src <- s
-        output[[paste0(tolower(src), "_raw")]] <- reactable::renderReactable(
-          raw_fields_table(sm[[src]][sm[[src]]$kind == "raw", ]))
-      })
-    })
-
-    observeEvent(input$specimen_fields_save, {
-      con <- session$userData$con
-      picked <- unlist(lapply(names(META_SOURCES), function(src) {
-        s <- meta_field_summary(con, src)
-        raw <- s[s$kind == "raw", ]
-        raw$key[reactable::getReactableState(paste0(tolower(src), "_raw"), "selected") %||% integer(0)]
-      }))
-      combos <- unlist(lapply(names(META_SOURCES), function(s) input[[paste0(tolower(s), "_combos")]]))
-      .meta_save_fields(con, c(combos, picked))
-      removeModal()
-      meta_fields_ver(meta_fields_ver() + 1L)
-      rv$data <- fetch_data()
     })
 
     # Render table ----
     output$table <- reactable::renderReactable({
-      meta_fields_ver()
       meta_ver()
       meta_cols <- meta_view_table_defs(session$userData$con, isolate(rv$data))
       reactable::reactable(
@@ -696,7 +660,7 @@ export_server <- function(id) {
       snap <- rv$export_snap
       rv$export_snap <- NULL
       tmpl_choices <- list_export_templates(con)
-      sel_tmpl <- if (rv$export_template %in% tmpl_choices) rv$export_template else "default"
+      sel_tmpl <- if (export_last_template(con) %in% tmpl_choices) export_last_template(con) else "default"
       rv$export_template <- sel_tmpl
       opts <- get_export_opts(con, sel_tmpl)
       if (!is.null(snap)) {
@@ -704,6 +668,9 @@ export_server <- function(id) {
         sel_tmpl <- snap$template_select %||% sel_tmpl
         opts$fasta_header <- snap$fasta_header %||% opts$fasta_header
         opts$fasta_header_gene <- snap$fasta_header_gene %||% opts$fasta_header_gene
+        rv$export_template <- sel_tmpl
+      } else {
+        opts$fasta_header <- nmnh_template_pref(con, opts$fasta_header)
       }
       # Usable tokens as grouped chips; bookkeeping fields are never offered (T23).
       sample_cols <- tryCatch(
@@ -716,9 +683,12 @@ export_server <- function(id) {
         rv$data[!is.na(rv$data$export_group), , drop = FALSE], sample_cols, ticked
       )
       grouped <- rv$data[!is.na(rv$data$export_group), , drop = FALSE]
+      nmnh_cols <- nmnh_columns(con)
+      nmnh_choices <- c("(none: look up from GBIF, NCBI, or GEOME)" = "",
+                        setdiff(sample_cols, c("ID", "Taxon", "R1", "R2")))
       cols_help <- tags$details(
-        tags$summary("Available columns"),
-        opts_help(
+        class = "mp-meta-panel", open = NA,
+        meta_panel_summary(token_groups, tagList(
           "Click a column to insert it at the cursor of the header box you last clicked. ",
           "Write a column name in braces to use its value, for example ",
           tags$code("{Taxon}"), ". ", tags$code("{seqid}"), " is the record ",
@@ -726,9 +696,8 @@ export_server <- function(id) {
           tags$code("ID_p<path>_s<scaffold>"), " when one sample exports more ",
           "than one record. Columns from your mapping file work here even ",
           "when the table does not show them. Orange columns are empty for ",
-          "some records in the chosen export group; hover one for the count.",
-          nested = TRUE
-        ),
+          "some records in the chosen export group; hover one for the count."
+        )),
         export_token_ui(token_groups, target_id = ns("fasta_header"), ns = ns,
                         totals = jsonlite::toJSON(as.list(table(grouped$export_group)),
                                                   auto_unbox = TRUE)),
@@ -748,16 +717,21 @@ export_server <- function(id) {
       hdr_box <- function(id, label, value) {
         htmltools::tagQuery(
           textAreaInput(ns(id), label, value, width = "100%")
-        )$find("textarea")$addAttrs(
+        )$find("textarea")$addClass("mp-hl")$addAttrs(spellcheck = "false", autocomplete = "off",
           `aria-describedby` = ns(paste0(id, "_status"))
-        )$before(uiOutput(ns(paste0(id, "_status"))))$allTags()
+        )$before(uiOutput(ns(paste0(id, "_status"))))$after(
+          tags$details(class = "mp-hdr-preview", open = NA,
+                       tags$summary("Preview"), uiOutput(ns(paste0(id, "_preview"))))
+        )$allTags()
       }
       modalDialog(
         title = mp_modal_title(
           tagList("Export data", uiOutput(ns("export_gears"), inline = TRUE))
         ),
-        size = "l",
-        class = "mp-modal-form",
+        size = "xl",
+        class = "mp-modal-form mp-export-body",
+        # Options and headers on the left, Available metadata pinned on the right
+        div(class = "mp-export-split", div(class = "mp-export-main",
         # Export group + header-template selector + Save, one row.
         div(
           style = "display: flex; flex-flow: row nowrap; gap: 1em;",
@@ -800,26 +774,70 @@ export_server <- function(id) {
         ),
         # What pressing Export will do, in the group currently chosen.
         uiOutput(ns("export_summary")),
-        hdr_box("fasta_header", "Mitogenome FASTA header:", opts$fasta_header),
-        mp_checkbox(
-          ns("export_genes"),
-          "Export individual protein-coding and rRNA genes",
-          value = snap$export_genes %||% FALSE
+        div(class = "mp-card mp-card-nmnh",
+        div(class = "mp-nmnh-toggle mp-card-title",
+          mp_checkbox(ns("nmnh_user"), tagList(tags$img(src = "www/si_sun.svg", alt = "", class = "nmnh-logo"), "NMNH user"),
+                    value = nmnh_template_on(opts$fasta_header)),
+          mp_help_tip(tagList(
+            "Adds the ", tags$code("[specimen_voucher=]"), " and ",
+            tags$code("[voucherURI=]"), " modifiers required by the NMNH Minimum ",
+            "Genomics Metadata Requirements, so each GenBank record links back to ",
+            "its museum specimen. Values come from your mapping file, GBIF, NCBI, ",
+            "or GEOME, and are checked against GBIF."
+          ), label = "NMNH user")
         ),
-        opts_help(
-          "Writes one FASTA and one feature table per gene, into a genes ",
-          "folder beside the group files."
-        ),
-        # The gene header only matters when the genes are being written.
         conditionalPanel(
-          condition = "input.export_genes == true",
+          condition = "input.nmnh_user == true",
           ns = ns,
-          hdr_box("fasta_header_gene", "Gene FASTA header:",
-                  opts$fasta_header_gene),
-          opts_help("The gene name is added to this header automatically.",
-                    nested = TRUE)
+          div(
+            class = "mp-card-body",
+            uiOutput(ns("nmnh_sources")),
+            tags$details(
+              class = "mp-nmnh-cols",
+              tags$summary("Optional: take these from mapping file columns"),
+              opts_help(
+                "Not required. Samples with GBIF, NCBI, or GEOME IDs get their catalog ",
+                "number and specimen link looked up there. A column picked here is ",
+                "used first, and the databases fill any gaps.",
+                nested = TRUE
+              ),
+              div(
+                style = "display: flex; flex-flow: row nowrap; gap: 1em;",
+                div(style = "flex: 1; min-width: 0;",
+                    selectInput(ns("nmnh_voucher_col"), "Catalog number column (e.g. USNM:FISH:12345)",
+                                nmnh_choices, selected = nmnh_cols$voucher %|NA|% "", width = "100%",
+                                selectize = FALSE)),
+                div(style = "flex: 1; min-width: 0;",
+                    selectInput(ns("nmnh_uri_col"), "Specimen link column (ARK, e.g. http://n2t.net/ark:/65665/3...)",
+                                nmnh_choices, selected = nmnh_cols$uri %|NA|% "", width = "100%",
+                                selectize = FALSE))
+              )
+            ),
+            uiOutput(ns("nmnh_status"))
+          )
+        )),
+        div(class = "mp-card mp-card-plain",
+            hdr_box("fasta_header", "Mitogenome FASTA header", opts$fasta_header)),
+        div(class = "mp-card mp-card-plain",
+          div(class = "mp-card-title", mp_checkbox(
+            ns("export_genes"),
+            "Export individual protein-coding and rRNA genes",
+            value = snap$export_genes %||% FALSE
+          )),
+          opts_help(
+            "Writes one FASTA and one feature table per gene, into a genes ",
+            "folder beside the group files."
+          ),
+          # The gene header only matters when the genes are being written.
+          conditionalPanel(
+            condition = "input.export_genes == true",
+            ns = ns,
+            hdr_box("fasta_header_gene",
+                    tagList("Gene FASTA header ",
+                            span(class = "mp-card-note", "(the gene name is added automatically)")),
+                    opts$fasta_header_gene)
+          )
         ),
-        cols_help,
         mp_checkbox(
           ns("include_alignments"),
           "Generate group-level PCG alignment summary",
@@ -830,13 +848,12 @@ export_server <- function(id) {
           "protein-coding gene in the group. Needs more than one record."
         ),
         # PCG outlier review options, separated from the export options above
-        tags$hr(style = "border-top: 1px solid var(--mp-border); margin: 1em 0 0.75em;"),
-        h4("PCG annotation outlier review", style = "margin-top: 0;"),
-        mp_checkbox(
+        div(class = "mp-card mp-card-plain",
+        div(class = "mp-card-title", mp_checkbox(
           ns("review_outliers"),
           "Review PCG annotations for outliers",
           value = snap$review_outliers %||% rv$opt_review
-        ),
+        )),
         conditionalPanel(
           condition = "input.review_outliers == true",
           ns = ns,
@@ -876,7 +893,8 @@ export_server <- function(id) {
               )
             )
           )
-        ),
+        ))),
+        div(class = "mp-export-side", cols_help)),
         footer = mp_footer(
           primary = actionButton(ns("export_data"), "Export"),
           dismiss = "Cancel"
@@ -905,12 +923,27 @@ export_server <- function(id) {
       )
     }
 
+    # NMNH values per sample of the chosen group, from nmnh_resolve()
+    nmnh_res <- reactiveVal(NULL)
+    with_nmnh <- function(d) {
+      r <- nmnh_res()
+      for (k in c("nmnh_specimen_voucher", "nmnh_voucherURI")) {
+        d[[k]] <- if (is.null(r)) rep(NA_character_, nrow(d)) else r[[k]][match(d$ID, r$ID)]
+      }
+      d
+    }
+    group_data <- reactive({
+      g <- input$export_group
+      with_nmnh(if (isTruthy(g)) rv$data[rv$data$export_group %in% g, , drop = FALSE] else rv$data)
+    })
     output$fasta_header_status <- renderUI({
-      render_hdr_status(validate_fasta_header(hdr_main(), rv$data, require_completeness = TRUE))
+      render_hdr_status(validate_fasta_header(hdr_main(), group_data(), require_completeness = TRUE))
     })
     output$fasta_header_gene_status <- renderUI({
-      render_hdr_status(validate_fasta_header(hdr_gene(), rv$data))
+      render_hdr_status(validate_fasta_header(hdr_gene(), group_data()))
     })
+    output$fasta_header_preview <- renderUI(hdr_preview_ui(hdr_main(), group_data()))
+    output$fasta_header_gene_preview <- renderUI(hdr_preview_ui(hdr_gene(), group_data()))
 
     # Gears turn only while an export is actually running (T22).
     output$export_gears <- renderUI({
@@ -933,12 +966,8 @@ export_server <- function(id) {
         files <- c(files, paste0("AA_alignments_", group, ".html"))
       }
       div(
-        style = paste(
-          "font-size: var(--mp-fs-meta); padding: 8px 12px; margin: 4px 0 14px;",
-          "background: var(--mp-surface-alt);",
-          "border-left: 3px solid var(--mp-primary);"
-        ),
-        div(sprintf("%s in group \"%s\".", mp_n(n, "record"), group)),
+        class = "mp-card mp-card-summary",
+        div(class = "mp-card-title", sprintf("%s in group \"%s\"", mp_n(n, "record"), group)),
         div("Written to ", tags$code(class = "mp-path", path), " as: ",
             paste(files, collapse = ", ")),
         if (dir.exists(path)) {
@@ -958,10 +987,15 @@ export_server <- function(id) {
     observeEvent(input$template_select, {
       req(input$template_select)
       name <- input$template_select
+      # the dropdown reports its value when the window opens; only a change reloads
+      if (identical(name, rv$export_template)) return()
       rv$export_template <- name
       con <- session$userData$con
+      # The template decides NMNH user; the project setting follows it
       if (name %in% list_export_templates(con)) {
         o <- get_export_opts(con, name)
+        export_set_last_template(con, name)
+        nmnh_set_user_pref(con, nmnh_template_on(o$fasta_header))
         updateTextAreaInput(session, "fasta_header", value = o$fasta_header)
         updateTextAreaInput(session, "fasta_header_gene", value = o$fasta_header_gene)
       }
@@ -974,9 +1008,9 @@ export_server <- function(id) {
     observe({
       shinyjs::toggleState(
         "save_template",
-        condition = isTRUE(validate_fasta_header(hdr_main(), rv$data)$ok) &&
+        condition = isTRUE(validate_fasta_header(hdr_main(), with_nmnh(rv$data))$ok) &&
           (!isTRUE(input$export_genes) ||
-             isTRUE(validate_fasta_header(hdr_gene(), rv$data)$ok))
+             isTRUE(validate_fasta_header(hdr_gene(), with_nmnh(rv$data))$ok))
       )
     })
 
@@ -999,6 +1033,7 @@ export_server <- function(id) {
         options = list(create = TRUE, maxItems = 1)
       )
       rv$export_template <- name
+      export_set_last_template(con, name)
       mp_toast(sprintf("Saved header template \"%s\".", name))
     })
 
@@ -1006,9 +1041,9 @@ export_server <- function(id) {
     # is invalid (so a bad template can never reach export). The gene header is
     # only checked when genes are being exported: its box is hidden otherwise.
     valid_headers_or_alert <- function() {
-      v_main <- validate_fasta_header(input$fasta_header, rv$data)
+      v_main <- validate_fasta_header(input$fasta_header, with_nmnh(rv$data))
       v_gene <- if (isTRUE(input$export_genes)) {
-        validate_fasta_header(input$fasta_header_gene, rv$data)
+        validate_fasta_header(input$fasta_header_gene, with_nmnh(rv$data))
       } else {
         list(ok = TRUE)
       }
@@ -1024,6 +1059,392 @@ export_server <- function(id) {
       }
       TRUE
     }
+
+    # NMNH user ----------------------------------------------------------------
+    # The switch mirrors the main template: on iff it carries both NMNH tokens.
+    nmnh_on <- reactive(nmnh_template_on(hdr_main()))
+    nmnh_key <- reactiveVal(NULL)
+    nmnh_refresh <- function(force = FALSE) {
+      con <- session$userData$con
+      ids <- unique(rv$data$ID[rv$data$export_group %in% input$export_group])
+      key <- paste(c(ids, unlist(nmnh_columns(con))), collapse = "|")
+      if (!force && identical(key, nmnh_key())) return(invisible())
+      nmnh_res(NULL)
+      res <- withProgress(message = "Checking NMNH vouchers", nmnh_resolve(con, ids))
+      nmnh_res(res)
+      nmnh_key(key)
+    }
+    nmnh_refresh_ids <- function(ids) {
+      r <- nmnh_res()
+      ids <- intersect(ids, r$ID)
+      if (!length(ids)) return(invisible())
+      new <- nmnh_resolve(session$userData$con, ids)
+      r[match(ids, r$ID), ] <- new
+      nmnh_res(r)
+    }
+    observeEvent(list(nmnh_on(), input$export_group), {
+      if (isTRUE(nmnh_on())) nmnh_refresh()
+    })
+    observeEvent(hdr_main(), {
+      on <- nmnh_template_on(hdr_main())
+      if (!identical(on, isTRUE(input$nmnh_user))) {
+        shinyWidgets::updatePrettyCheckbox(session, "nmnh_user", value = on)
+      }
+    })
+    nmnh_apply <- function() {
+      updateTextAreaInput(session, "fasta_header", value = nmnh_template_add(input$fasta_header))
+      if (isTRUE(input$export_genes) && !nmnh_template_on(input$fasta_header_gene)) {
+        updateTextAreaInput(session, "fasta_header_gene",
+                            value = nmnh_template_add(input$fasta_header_gene))
+      }
+    }
+    # Gene export switched on after NMNH: give the gene header the NMNH fields too
+    observeEvent(input$export_genes, ignoreInit = TRUE, {
+      if (isTRUE(input$export_genes) && isTRUE(input$nmnh_user) &&
+          !nmnh_template_on(input$fasta_header_gene %||% "")) {
+        updateTextAreaInput(session, "fasta_header_gene",
+                            value = nmnh_template_add(input$fasta_header_gene %||% ""))
+      }
+    })
+    observeEvent(input$nmnh_user, ignoreInit = TRUE, {
+      on <- isTRUE(input$nmnh_user)
+      nmnh_set_user_pref(session$userData$con, on)
+      if (on == nmnh_template_on(input$fasta_header)) return()
+      if (!on) {
+        main <- nmnh_template_remove(input$fasta_header)
+        if (identical(main, input$fasta_header)) {
+          shinyWidgets::updatePrettyCheckbox(session, "nmnh_user", value = TRUE)
+          mp_toast("The NMNH modifiers in the header were edited, so they were left in. Take them out by hand.",
+                   "warning")
+          return()
+        }
+        updateTextAreaInput(session, "fasta_header", value = main)
+        updateTextAreaInput(session, "fasta_header_gene",
+                            value = nmnh_template_remove(input$fasta_header_gene %||% ""))
+        return()
+      }
+      found <- unique(unlist(lapply(
+        c(input$fasta_header, if (isTRUE(input$export_genes)) input$fasta_header_gene),
+        nmnh_existing_mods
+      )))
+      if (!length(found)) return(nmnh_apply())
+      mp_confirm(
+        ns("nmnh_replace"),
+        title = "Replace voucher modifiers?",
+        text = paste0("The header already has ", paste(found, collapse = ", "),
+                      ". Replace with NMNH values?"),
+        action_label = "Replace"
+      )
+    })
+    observeEvent(input$nmnh_replace, {
+      if (isTRUE(input$nmnh_replace)) {
+        nmnh_apply()
+      } else {
+        shinyWidgets::updatePrettyCheckbox(session, "nmnh_user", value = FALSE)
+      }
+    })
+    observeEvent(list(input$nmnh_voucher_col, input$nmnh_uri_col), ignoreInit = TRUE, {
+      req(!is.null(input$nmnh_voucher_col), !is.null(input$nmnh_uri_col))
+      v <- input$nmnh_voucher_col
+      u <- input$nmnh_uri_col
+      con <- session$userData$con
+      cur <- nmnh_columns(con)
+      if (identical(v, cur$voucher %|NA|% "") && identical(u, cur$uri %|NA|% "")) return()
+      nmnh_set_columns(con, v, u)
+      if (isTRUE(nmnh_on())) nmnh_refresh()
+    })
+    observeEvent(input$nmnh_recheck, {
+      con <- session$userData$con
+      u <- nmnh_res()$nmnh_voucherURI
+      if (DBI::dbExistsTable(con, "nmnh_ark_cache")) {
+        for (x in u[!is.na(u)]) {
+          DBI::dbExecute(con, "DELETE FROM nmnh_ark_cache WHERE ark = ? OR parent_ark = ?",
+                         params = list(x, x))
+        }
+      }
+      nmnh_refresh(force = TRUE)
+    })
+
+    output$nmnh_status <- renderUI({
+      req(nmnh_on())
+      r <- nmnh_res()
+      if (is.null(r)) return(span(class = "text-muted", "Checking NMNH values..."))
+      bad <- sum(!r$ok)
+      skipped <- if (any(!is.na(r$nmnh_voucherURI) & !r$checked & !r$not_nmnh)) {
+        " GBIF could not be reached, so the specimen check was skipped."
+      }
+      if (bad == 0) {
+        n_not <- sum(r$not_nmnh)
+        return(div(class = "mp-nmnh-status mp-fg-success",
+                   icon("circle-check"), sprintf(" All %s ready%s. ", mp_n(nrow(r), "sample"),
+                                                 if (n_not) sprintf(" (%d marked Not NMNH)", n_not) else ""),
+                   actionLink(ns("nmnh_report"), "Review NMNH values"), skipped))
+      }
+      div(class = "mp-nmnh-status mp-fg-warning",
+          icon("triangle-exclamation"),
+          sprintf(" %d of %s %s attention. ", bad, mp_n(nrow(r), "sample"), if (bad == 1) "needs" else "need"),
+          actionButton(ns("nmnh_report"), "Review and fix", class = "btn-sm"),
+          skipped)
+    })
+    output$nmnh_sources <- renderUI({
+      req(nmnh_on())
+      r <- nmnh_res()
+      if (is.null(r)) return(NULL)
+      div(class = "mp-nmnh-sources",
+          div(tags$b("Catalog number: "), nmnh_source_text(r$voucher_source)),
+          div(tags$b("Specimen link: "), nmnh_source_text(r$uri_source)))
+    })
+
+    nmnh_note <- function(src, note) {
+      x <- c(if (!is.na(src)) paste("source:", nmnh_source_label(src)), if (nzchar(note)) note)
+      paste(x, collapse = "; ")
+    }
+    nmnh_show_report <- function() {
+      take_snap()
+      r <- nmnh_res()
+      nmnh_report_ids(r$ID[!r$ok | r$not_nmnh])
+      nmnh_ready_ids(r$ID[r$ok & !r$not_nmnh])
+      nmnh_typed(list())
+      modalDialog(
+        title = mp_modal_title("NMNH voucher report", close = FALSE),
+        size = "l",
+        p(class = "mp-fg-warning", icon("triangle-exclamation"),
+          " NMNH records should not be submitted to GenBank without both a ",
+          tags$code("specimen_voucher"), " and a ", tags$code("voucherURI"), "."),
+        opts_help(
+          "Type a value into a cell to fix it. It is checked when you leave the ",
+          "cell and saved with this project's NMNH values; your mapping file is ",
+          "not changed. Clear a cell to go back to the automatic value. Pick a ",
+          "field under a cell to take that value from another metadata field. ",
+          "Tick Not NMNH for samples that are not NMNH specimens: their values ",
+          "are used as found, without checks. A missing value leaves its ",
+          "modifier out of the header."
+        ),
+        div(class = "mp-nmnh-fields", "Fields to pick from: mapping-file columns and the metadata ",
+            "fields ticked for export. ", actionLink(ns("nmnh_choose_fields"), "Choose fields"),
+            tags$br(), "Not NMNH: ", actionLink(ns("nmnh_flag_all"), "Select all"), " | ",
+            actionLink(ns("nmnh_flag_none"), "Clear all")),
+        div(class = "mp-nmnh-table-title",
+            sprintf("Need attention or marked Not NMNH (%d)", length(nmnh_report_ids()))),
+        div(class = "mp-nmnh-scroll", reactable::reactableOutput(ns("nmnh_table"))),
+        div(class = "mp-nmnh-table-title",
+            sprintf("Pass the NMNH check (%d)", length(nmnh_ready_ids()))),
+        div(class = "mp-nmnh-scroll", reactable::reactableOutput(ns("nmnh_ready_table"))),
+        footer = mp_footer(
+          primary = actionButton(ns("nmnh_back"), "Back to export"), dismiss = NULL,
+          extra = div(
+            class = "mp-nmnh-actions",
+            uiOutput(ns("nmnh_copy")),
+            actionButton(ns("nmnh_recheck"), "Re-check with GBIF", class = "btn-sm",
+                         title = "Ask GBIF again about this group's specimen links"),
+            downloadButton(ns("nmnh_csv"), "Download CSV for bulk edit", class = "btn-sm btn-default"),
+            fileInput(ns("nmnh_upload"), NULL, accept = ".csv", buttonLabel = "Upload edited CSV",
+                      placeholder = "CSV file")
+          )
+        )
+      ) |> showModal()
+    }
+    observeEvent(input$nmnh_report, nmnh_show_report())
+    observeEvent(input$nmnh_choose_fields, meta_view_open(closed_input = ns("nmnh_fields_closed")))
+    observeEvent(input$nmnh_fields_closed, {
+      nmnh_ver(nmnh_ver() + 1L)
+      nmnh_show_report()
+    })
+    nmnh_flag_many <- function(value) {
+      ids <- nmnh_report_ids()
+      req(length(ids))
+      con <- session$userData$con
+      for (id in ids) nmnh_set_not_nmnh(con, id, value)
+      nmnh_typed(list())
+      nmnh_refresh_ids(ids)
+      trigger("refresh_export")
+    }
+    observeEvent(input$nmnh_flag_all, nmnh_flag_many(TRUE))
+    observeEvent(input$nmnh_flag_none, nmnh_flag_many(FALSE))
+    observeEvent(input$nmnh_back, trigger("export"))
+
+    nmnh_problems <- reactive({
+      r <- req(nmnh_res())
+      r[!r$ok, , drop = FALSE]
+    })
+    # Rows shown in the report: the problems found when it opened, kept after a
+    # fix so the entry and its check stay visible. Invalid entries are not saved.
+    nmnh_report_ids <- reactiveVal(character(0))
+    nmnh_ready_ids <- reactiveVal(character(0))
+    nmnh_typed <- reactiveVal(list())
+    nmnh_ver <- reactiveVal(0L)
+    # One editable table: problem rows, or rows that pass (with an Auto-fixed column)
+    nmnh_report_table <- function(ids, ready = FALSE) {
+      r <- req(nmnh_res())
+      r <- r[match(ids, r$ID), , drop = FALSE]
+      r <- r[!is.na(r$ID), , drop = FALSE]
+      typed <- nmnh_typed()
+      nmnh_ver()
+      choices <- nmnh_field_choices(session$userData$con)
+      send <- function(input_id, id, rest) {
+        sprintf("Shiny.setInputValue('%s', {id: %s, %s}, {priority: 'event'})",
+                ns(input_id), jsonlite::toJSON(id, auto_unbox = TRUE), rest)
+      }
+      pick <- function(field, index) {
+        cur <- r[[paste0(field, "_field")]][index] %|NA|% ""
+        opts <- c(None = "none", Automatic = "", choices)
+        if (nzchar(cur) && !cur %in% opts) opts <- c(opts, stats::setNames(cur, .nmnh_key_label(cur)))
+        tags$select(
+          class = "form-control input-sm mp-nmnh-pick", `aria-label` = paste(field, "field", r$ID[index]),
+          title = "Field the value comes from",
+          onchange = send("nmnh_field", r$ID[index], sprintf("field: '%s', key: this.value", field)),
+          lapply(seq_along(opts), function(i) {
+            tags$option(value = opts[[i]], selected = if (identical(opts[[i]], cur)) NA, names(opts)[i])
+          })
+        )
+      }
+      # html = TRUE: reactable drops inline handlers on R tags
+      cell <- function(field) function(value, index) {
+        bad <- typed[[paste(r$ID[index], field)]]
+        src <- r[[paste0(field, "_source")]][index]
+        raw <- r[[paste0(field, "_note")]][index] %|NA|% ""
+        # short line: verdict and source; the full notes sit behind a help icon
+        short <- if (is.na(src)) "" else paste0(" (", nmnh_source_short(src), ")")
+        head1 <- strsplit(raw, "; ", fixed = TRUE)[[1]][1] %|NA|% "problem"
+        used <- r[[paste0(field, "_from")]][index]
+        full <- if (is.null(bad)) nmnh_note(src, raw) else ""
+        if (is.null(bad) && !is.na(used)) full <- paste0("Field: ", used, if (nzchar(raw)) paste0("\n", gsub("; ", "\n", raw, fixed = TRUE)))
+        if (is.null(bad) && (identical(raw, "missing") || !nzchar(full))) {
+          full <- "No value found in the mapping file, GBIF, NCBI, or GEOME."
+        }
+        if (identical(r[[paste0(field, "_field")]][index], "none")) {
+          full <- "Field set to None: no value, so this modifier is left out of the header."
+        }
+        st <- if (isTRUE(r$not_nmnh[index]) && is.null(bad)) {
+          if (is.na(value)) list("muted", "circle-minus", "Missing: modifier left out")
+          else list("muted", "circle-minus", paste0("Not checked", short))
+        } else if (!is.null(bad)) {
+          list("danger", "circle-xmark", bad$note)
+        } else if (isTRUE(r[[paste0(field, "_ok")]][index])) {
+          list("success", "circle-check", paste0("Valid", short))
+        } else {
+          list("danger", "circle-xmark", paste0(toupper(substr(head1, 1, 1)), substring(head1, 2), short))
+        }
+        as.character(tagList(
+          tags$input(
+            type = "text", class = "form-control input-sm",
+            value = if (!is.null(bad)) bad$value else value %|NA|% "",
+            `aria-label` = paste(field, r$ID[index]),
+            onchange = send("nmnh_edit", r$ID[index], sprintf("field: '%s', value: this.value", field))
+          ),
+          pick(field, index),
+          div(class = if (st[[1]] == "muted") "text-muted" else paste0("mp-fg-", st[[1]]),
+              style = "font-size: var(--mp-fs-meta); white-space: normal;",
+              icon(st[[2]]), " ", st[[3]],
+              if (nzchar(full)) mp_help_tip(gsub("\n", "<br>", htmltools::htmlEscape(full), fixed = TRUE),
+                                               label = paste(field, r$ID[index])))
+        ))
+      }
+      d <- data.frame(ID = r$ID, not_nmnh = r$not_nmnh, specimen_voucher = r$nmnh_specimen_voucher,
+                      voucherURI = r$nmnh_voucherURI)
+      if (ready) d$auto_fixed <- ifelse(r$fixed, "Yes", "")
+      reactable::reactable(
+        d,
+        compact = TRUE, pagination = FALSE,
+        language = reactable::reactableLang(
+          noData = if (ready) "No samples pass the NMNH check yet." else "No NMNH problems."),
+        columns = c(list(
+          ID = reactable::colDef(width = 120, html = TRUE, cell = function(value) {
+            as.character(tags$a(
+              href = "#", title = "View this sample's metadata",
+              onclick = sprintf(
+                "event.preventDefault(); Shiny.setInputValue('%s', %s, {priority: 'event'})",
+                ns("nmnh_meta_open"), jsonlite::toJSON(value, auto_unbox = TRUE)),
+              value
+            ))
+          }),
+          not_nmnh = reactable::colDef(
+            name = "Not NMNH", width = 110, align = "center", html = TRUE,
+            header = rt_header("Not NMNH", "Tick when the sample is not an NMNH specimen. Its values are used as found, without checks."),
+            cell = function(value, index) as.character(tags$input(
+              type = "checkbox", checked = if (isTRUE(value)) NA, `aria-label` = paste("Not NMNH", r$ID[index]),
+              onchange = send("nmnh_flag", r$ID[index], "value: this.checked")))
+          ),
+          specimen_voucher = reactable::colDef(minWidth = 280, html = TRUE, cell = cell("voucher")),
+          voucherURI = reactable::colDef(minWidth = 280, html = TRUE, cell = cell("uri"))
+        ), if (ready) list(auto_fixed = reactable::colDef(
+          name = "Auto-fixed", width = 100, align = "center",
+          header = rt_header("Auto-fixed", "MitoPilot corrected the format of a value, or replaced a tissue link with its specimen. The ? under a cell says what changed.")
+        )))
+      )
+    }
+    output$nmnh_table <- reactable::renderReactable(nmnh_report_table(nmnh_report_ids()))
+    output$nmnh_ready_table <- reactable::renderReactable(nmnh_report_table(nmnh_ready_ids(), ready = TRUE))
+    output$nmnh_copy <- renderUI({
+      r <- nmnh_problems()
+      d <- data.frame(ID = r$ID, specimen_voucher = r$nmnh_specimen_voucher,
+                      voucher_note = r$voucher_note, voucherURI = r$nmnh_voucherURI,
+                      uri_note = r$uri_note)
+      d[is.na(d)] <- ""
+      tsv <- paste(c(paste(names(d), collapse = "\t"), do.call(paste, c(d, sep = "\t"))),
+                   collapse = "\n")
+      tags$button(
+        type = "button", class = "btn btn-default btn-sm",
+        onclick = paste0(
+          "navigator.clipboard.writeText(", jsonlite::toJSON(tsv, auto_unbox = TRUE), ");",
+          "var t=this.querySelector('span');",
+          "if(t){var o=t.innerText;t.innerText='Copied!';",
+          "setTimeout(function(){t.innerText=o;},1200);}"
+        ),
+        icon("copy"), tags$span(style = "margin-left: 0.3em;", "Copy table")
+      )
+    })
+    output$nmnh_csv <- downloadHandler(
+      filename = function() paste0("nmnh_vouchers_", Sys.Date(), ".csv"),
+      content = function(file) {
+        out <- nmnh_download_df(session$userData$con, nmnh_problems())
+        utils::write.csv(out, file, row.names = FALSE, na = "")
+      }
+    )
+    observeEvent(input$nmnh_edit, {
+      e <- input$nmnh_edit
+      t <- nmnh_typed()
+      key <- paste(e$id, e$field)
+      note <- nmnh_edit_value(session$userData$con, e$id, e$field, e$value)
+      t[[key]] <- if (!is.null(note)) list(value = e$value, note = note)
+      nmnh_typed(t)
+      if (!is.null(note)) return()
+      nmnh_refresh_ids(e$id)
+      trigger("refresh_export")
+    })
+    observeEvent(input$nmnh_flag, {
+      e <- input$nmnh_flag
+      nmnh_set_not_nmnh(session$userData$con, e$id, isTRUE(e$value))
+      t <- nmnh_typed()
+      t[paste(e$id, c("voucher", "uri"))] <- list(NULL)
+      nmnh_typed(t)
+      nmnh_refresh_ids(e$id)
+      trigger("refresh_export")
+    })
+    observeEvent(input$nmnh_field, {
+      e <- input$nmnh_field
+      nmnh_set_field(session$userData$con, e$id, e$field, e$key)
+      t <- nmnh_typed()
+      t[[paste(e$id, e$field)]] <- NULL
+      nmnh_typed(t)
+      nmnh_refresh_ids(e$id)
+      trigger("refresh_export")
+    })
+    observeEvent(input$nmnh_upload, {
+      res <- tryCatch(nmnh_upload_csv(session$userData$con, input$nmnh_upload$datapath),
+                      error = function(e) {
+                        mp_alert(title = "Upload failed", text = conditionMessage(e), type = "error")
+                        NULL
+                      })
+      if (is.null(res)) return()
+      nmnh_refresh_ids(res$ids)
+      trigger("refresh_export")
+      mp_toast(sprintf("Updated %s from the CSV.", mp_n(length(res$ids), "sample")))
+      if (length(res$bad)) {
+        mp_alert(title = "Some values were not used", type = "warning", html = TRUE,
+                 text = tags$ul(style = "text-align: left;", lapply(res$bad, tags$li)))
+      }
+    })
 
     exp_val <- function(name) input[[name]]
 
@@ -1118,14 +1539,14 @@ export_server <- function(id) {
     }
 
     # Write the export files for the current group using the stashed options,
-    # with review off (flagging already happened up front). Shown behind a waiter
-    # overlay since this runs after the export modal is gone.
+    # with review off (flagging already happened up front).
     write_export_files <- function() {
       p <- rv$export_params
       if (is.null(p)) return(invisible(NULL))
       # export_files() can stop() (e.g. a sample still has multiple assembly paths).
       # Catch it so the app shows a clean alert instead of crashing the session.
       ok <- tryCatch({
+        withProgress(message = "Exporting...", detail = "Writing files. Hold tight.", value = 0.5,
         export_files(
           group = rv$review_group,
           fasta_header = p$fasta_header,
@@ -1137,10 +1558,9 @@ export_server <- function(id) {
           start_aa = rv$review_start,
           stop_aa = rv$review_stop,
           ident_pct = rv$review_ident
-        )
+        ))
         TRUE
       }, error = function(e) {
-        waiter::waiter_hide()
         mp_alert(
           title = "Export failed",
           text = conditionMessage(e),
@@ -1157,14 +1577,6 @@ export_server <- function(id) {
     # the DB), then show the export-complete popup. Used both when the user clicks
     # "Done" and when review finds nothing to flag.
     finalize_export <- function(extra = NULL) {
-      waiter::waiter_show(
-        html = tagList(
-          waiter::spin_fading_circles(),
-          tags$h4(style = "color:white; margin-top:1em;", "Writing export files, hold tight...")
-        ),
-        color = "rgba(40,40,40,0.85)"
-      )
-      on.exit(waiter::waiter_hide())
       write_export_files()
       show_export_done_alert(extra = extra)
     }
@@ -1545,6 +1957,30 @@ export_server <- function(id) {
         )
         return()
       }
+      r <- if (nmnh_template_on(input$fasta_header)) nmnh_res()
+      if (!is.null(r) && any(!r$ok)) {
+        mp_confirm(
+          ns("nmnh_confirm"),
+          title = "NMNH values missing or wrong",
+          text = sprintf(paste(
+            "%d of %s in this group have NMNH problems. NMNH records should not be",
+            "submitted to GenBank without both a specimen_voucher and a voucherURI.",
+            "Exporting anyway leaves the empty modifiers out of the headers."),
+            sum(!r$ok), mp_n(nrow(r), "sample")),
+          action_label = "Export anyway",
+          cancel_label = "View report",
+          danger = TRUE
+        )
+        return()
+      }
+      specimen_then_export()
+    })
+
+    observeEvent(input$nmnh_confirm, {
+      if (isTRUE(input$nmnh_confirm)) specimen_then_export() else nmnh_show_report()
+    })
+
+    specimen_then_export <- function() {
       sp <- tryCatch(specimen_conflict_rows(input$export_group), error = function(e) {
         message("Specimen conflict check failed: ", conditionMessage(e))
         NULL
@@ -1562,7 +1998,7 @@ export_server <- function(id) {
         return()
       }
       fragmented_then_export()
-    })
+    }
 
     observeEvent(input$fragmented_confirm, ignoreInit = T, {
       req(input$fragmented_confirm)

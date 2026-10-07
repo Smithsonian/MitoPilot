@@ -20,7 +20,7 @@ test_that("export_token_groups sorts columns into the seven groups", {
   expect_equal(g$Basics$tokens$token,
                c("seqid", "ID", "Taxon", "genetic_code", "topology", "completeness", "path", "scaffold"))
   expect_equal(g$Basics$tokens$insert[3], "{Taxon}")
-  expect_equal(g$`Your mapfile columns`$tokens$token, c("site", "GEOME_BCID", "GBIF_ID"))
+  expect_equal(g$`Your mapfile columns`$tokens$token, "site")
   expect_equal(g$GEOME$tokens$token, c("GEOME_BCID", "geome_lat_lon"))
   expect_equal(g$GEOME$tokens$insert, c("{GEOME_BCID}", "[lat_lon={geome_lat_lon}]"))
   expect_equal(g$GEOME$tokens$example, c("ark:/1/A", "17.5 S 149.8 W"))
@@ -41,12 +41,12 @@ test_that("groups with nothing ticked or no extra columns say how to add some", 
   g <- export_token_groups(d, c("ID", "Taxon", "GEOME_BCID", "GBIF_ID"), character())
   expect_false(g$GEOME$open)
   expect_false(g$GBIF$open)
-  expect_match(g$GEOME$hint, "Set Export Metadata", fixed = TRUE)
-  expect_match(g$GBIF$hint, "Set Export Metadata", fixed = TRUE)
+  expect_match(g$GEOME$hint, "Metadata button", fixed = TRUE)
+  expect_match(g$GBIF$hint, "Metadata button", fixed = TRUE)
   expect_true(g$`Your mapfile columns`$open)
   expect_null(g$`Your mapfile columns`$hint)
   expect_equal(nrow(g$`Your mapfile columns`$tokens), 2L)
-  expect_equal(g$GEOME$tokens$token, "GEOME_BCID")
+  expect_equal(g$GEOME$tokens$token, character(0))
 })
 
 test_that("export_token_groups copes with no rows", {

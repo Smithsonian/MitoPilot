@@ -82,3 +82,31 @@ test_that("check_single_path blocks multi-path samples but allows fragmented one
     "s2"
   )
 })
+
+test_that("duplicate_modifiers ignores case and _ vs -, and skips distinct modifiers", {
+  dm <- duplicate_modifiers(c(
+    "s1 [organism=X] [Lat_Lon=1 N 2 E] [lat-lon=1 N 2 E]",
+    "s2 [organism=X] [lat_lon=1 N 2 E] [collection_date=2024]",
+    "s3 [BioSample=SAMN1] [biosample=SAMN1] [bioproject=PRJNA1]"
+  ))
+  expect_equal(dm, list("lat_lon", character(0), "biosample"))
+})
+
+test_that("a repeated source modifier warns but does not block", {
+  tpl <- "{seqid} [organism={Taxon}] [Organism={Taxon}] {completeness}"
+  res <- validate_fasta_header(tpl, multi_unit)
+  expect_true(res$ok)
+  expect_equal(res$level, "warn")
+  expect_match(res$message, "Duplicate [organism=]. NCBI", fixed = TRUE)
+  expect_equal(validate_fasta_header("{seqid} [organism={Taxon}] {completeness}", multi_unit)$level,
+               "ok")
+})
+
+test_that("header columns some samples leave empty are flagged", {
+  d <- data.frame(ID = c("S1", "S2", "S3"), seqid = c("S1", "S2", "S3"),
+                  v = c("x", NA, " "), k = "ok")
+  res <- validate_fasta_header("{seqid} {k} {v}", d)
+  expect_equal(res$level, "warn")
+  expect_match(res$message, "Missing data in {v} for 2 of 3 sample(s) (S2, S3)", fixed = TRUE)
+  expect_equal(validate_fasta_header("{seqid} {k}", d)$level, "ok")
+})

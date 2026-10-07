@@ -49,16 +49,66 @@ pipeline_server <- function(id) {
     process <- reactiveVal()
     job_submitting <- reactiveVal(FALSE)
 
+    # One name per run for its command, script, and logs (set when the run modal opens)
+    run_base <- reactiveVal()
+    run_log <- NULL   # Nextflow log of the in-app run in progress
+
     # Headless submission state (set when the run modal opens in headless mode)
-    headless_base <- reactiveVal()   # job name / file stem
     headless_nf <- reactiveVal()     # full "nextflow ..." command string
     headless_exec <- reactiveVal()   # scheduler executor from .config
     headless_queue <- reactiveVal()  # queue from .config
 
-    headless_work_dir <- function() dirname(getOption("MitoPilot.db") %||% ".")
+    headless_work_dir <- function() normalizePath(dirname(getOption("MitoPilot.db") %||% "."))
     headless_log_file <- function() {
-      file.path(headless_work_dir(), paste0(headless_base(), ".log"))
+      file.path(run_dir(headless_work_dir(), "logs"), paste0(run_base(), ".log"))
     }
+
+    make_nf_cmd <- function() {
+      cmd <- nextflow_cmd(session$userData$mode, base = run_base())
+      if (isFALSE(input$resume)) cmd <- stringr::str_remove(cmd, "-resume")
+      cmd
+    }
+
+    # New base when this one's Nextflow log already exists (a second launch
+    # from the same modal); returns the run's Nextflow log path
+    claim_run_base <- function(in_app = FALSE) {
+      wd <- normalizePath(dirname(getOption("MitoPilot.db") %||% "."))
+      log_path <- function() file.path(run_dir(wd, "nextflow"), paste0(run_base(), ".nextflow.log"))
+      job <- file.path(run_dir(wd, "jobs"), paste0(run_base(), ".sh"))
+      if (file.exists(log_path()) || (in_app && file.exists(job))) {
+        run_base(run_basename(session$userData$mode))
+        nf_cmd(make_nf_cmd())
+      }
+      log_path()
+    }
+
+    # Write the run's report (never breaks the app), then check for new reports
+    end_run <- function(p, how = NULL, notify = TRUE) {
+      force(how)
+      base <- NULL
+      tryCatch({
+        if (p$is_alive()) {
+          p$kill()
+          p$wait(2000)
+        }
+        if (!is.null(run_log) && file.exists(run_log)) {
+          wd <- normalizePath(dirname(getOption("MitoPilot.db") %||% "."))
+          r <- run_report(wd, run_log, exit_status = p$get_exit_status(), how = how)
+          write_run_report(wd, r)
+          base <- r$meta$base
+        }
+      }, error = function(e) message("Run report not written: ", conditionMessage(e)))
+      run_log <<- NULL
+      session$userData$run_live_log <- NULL
+      if (notify && is.function(session$userData$run_reports_check)) {
+        tryCatch(session$userData$run_reports_check(base), error = function(e) NULL)
+      }
+    }
+
+    session$onSessionEnded(function() {
+      p <- isolate(process())
+      if (!is.null(p) && p$is_alive()) end_run(p, "stopped", notify = FALSE)
+    })
 
     # Sync the editable script with the -resume toggle. Swap just the nextflow
     # command line so the user's other edits are preserved; full rebuild only if
@@ -74,7 +124,7 @@ pipeline_server <- function(id) {
       } else {
         updated <- paste(build_submit_script(
           headless_work_dir(), headless_exec(), headless_queue(),
-          new_nfc, headless_base(), headless_log_file()
+          new_nfc, run_base(), headless_log_file()
         ), collapse = "\n")
       }
       shiny::updateTextAreaInput(session, "submit_script", value = updated)
@@ -83,7 +133,8 @@ pipeline_server <- function(id) {
     on("run_modal", {
       job_submitting(FALSE)
       # Generate Nextflow params ----
-      nf_cmd(nextflow_cmd(session$userData$mode))
+      run_base(run_basename(session$userData$mode))
+      nf_cmd(make_nf_cmd())
 
       # Count what the run will update: samples in Assemble, one row per
       # sequence (path/scaffold unit) in Annotate.
@@ -137,13 +188,11 @@ pipeline_server <- function(id) {
         cfg <- read_config_executor(file.path(wd, ".config"))
         headless_exec(cfg$executor)
         headless_queue(cfg$queue)
-        headless_base(paste(tolower(session$userData$mode),
-                            format(Sys.time(), "%Y-%m-%d_%H-%M-%S"), sep = "_"))
         nfc <- paste(c("nextflow", nf_cmd()), collapse = " ")
         headless_nf(nfc)
         script_init <- paste(
           build_submit_script(wd, cfg$executor, cfg$queue, nfc,
-                              headless_base(), headless_log_file()),
+                              run_base(), headless_log_file()),
           collapse = "\n"
         )
         headless_ui <- div(
@@ -253,16 +302,12 @@ pipeline_server <- function(id) {
 
     # Toggle "-resume" Nextflow option
     observeEvent(input$resume, {
-      if (isTRUE(input$resume)) {
-        nf_cmd(nextflow_cmd(session$userData$mode))
-      } else {
-        nf_cmd(stringr::str_remove(nextflow_cmd(session$userData$mode), pattern = "-resume"))
-      }
+      nf_cmd(make_nf_cmd())
       output$nf_code_block <- shiny::renderText({
         paste(c("nextflow", nf_cmd()), collapse = " ")
       })
       # Headless: keep the editable script in sync with the -resume toggle
-      if (isTRUE(getOption("MitoPilot.headless")) && !is.null(headless_base())) {
+      if (isTRUE(getOption("MitoPilot.headless")) && !is.null(run_base())) {
         refresh_headless_script()
       }
     })
@@ -284,12 +329,15 @@ pipeline_server <- function(id) {
         process()$kill()
       }
 
-      wd <- dirname(getOption("MitoPilot.db") %||% ".")
+      wd <- normalizePath(dirname(getOption("MitoPilot.db") %||% "."))
       nat <- read_config_executor(file.path(wd, ".config"))$native_activate
       nat_env <- if (!is.null(nat)) native_env(nat) else character()
 
       # Pin the Nextflow engine to a MitoPilot-compatible version for this run.
       nxf_pin <- if (length(nat_env)) native_nf_pin(nat_env) else nf_pin_version()
+
+      run_log <<- claim_run_base(in_app = TRUE)
+      session$userData$run_live_log <- run_log
 
       p <- processx::process$new(
         "nextflow",
@@ -322,10 +370,12 @@ pipeline_server <- function(id) {
     # Headless: write the (edited) script + remember its resource block for reuse
     write_headless_script <- function() {
       work_dir <- headless_work_dir()
-      base <- headless_base()
+      base <- run_base()
       full_nf_cmd <- headless_nf()
       log_file_path <- headless_log_file()
-      script_path <- file.path(work_dir, paste0(base, ".sh"))
+      script_path <- file.path(run_dir(work_dir, "jobs"), paste0(base, ".sh"))
+      dir.create(dirname(script_path), recursive = TRUE, showWarnings = FALSE)
+      dir.create(dirname(log_file_path), recursive = TRUE, showWarnings = FALSE)
       text <- input$submit_script %||% ""
       writeLines(strsplit(text, "\n", fixed = TRUE)[[1]], script_path)
       save_submit_template(text, work_dir, full_nf_cmd, base, log_file_path)
@@ -339,9 +389,9 @@ pipeline_server <- function(id) {
         mp_alert(
           title = "Submission script saved",
           text = paste0(
-            "Wrote ", basename(script_path), " to your project directory and ",
+            "Wrote .runs/jobs/", basename(script_path), " in your project directory and ",
             "saved your resource settings for next time. Submit it yourself ",
-            "(e.g. sbatch / qsub / bsub)."
+            "(e.g. sbatch / qsub / bsub) from the project directory."
           ),
           type = "success"
         )
@@ -362,7 +412,7 @@ pipeline_server <- function(id) {
         mp_alert(
           title = "Job submitted",
           text = paste0(res$command, ": ", res$output,
-                        "\nLog: ", basename(headless_log_file())),
+                        "\nLog: .runs/logs/", basename(headless_log_file())),
           type = "success"
         )
         removeModal()
@@ -376,6 +426,7 @@ pipeline_server <- function(id) {
       req(!job_submitting())
       job_submitting(TRUE)
       shinyjs::disable(ns("submit_job"))
+      claim_run_base()
 
       # Let the user know submission is underway. The qsub/sbatch call below
       # blocks the R thread, so defer it to the next event-loop tick to let
@@ -404,22 +455,17 @@ pipeline_server <- function(id) {
 
       if (is_hydra_cluster) {
         tryCatch({
-          work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
+          work_dir <- normalizePath(dirname(getOption("MitoPilot.db") %||% "."))
           # nf_cmd() is reactive; read it via isolate() since this deferred
           # callback runs outside a reactive context.
           full_nf_cmd <- paste(c("nextflow", shiny::isolate(nf_cmd())), collapse = " ")
 
-          # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
-          timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
-          workflow_label <- tolower(session$userData$mode)
-
-          # 2. Combine them for a unique base filename.
-          base_filename <- paste(workflow_label, timestamp, sep = "_")
-
-          # 3. Define the job name, log file path, and script path using the base filename.
+          base_filename <- shiny::isolate(run_base())
           job_name <- base_filename
-          log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
-          script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
+          log_file_path <- file.path(run_dir(work_dir, "logs"), paste0(base_filename, ".log"))
+          script_path <- file.path(run_dir(work_dir, "jobs"), paste0(base_filename, ".sh"))
+          dir.create(dirname(log_file_path), recursive = TRUE, showWarnings = FALSE)
+          dir.create(dirname(script_path), recursive = TRUE, showWarnings = FALSE)
 
           script_content <- build_submit_script(work_dir, "sge", NULL, full_nf_cmd, job_name, log_file_path)
 
@@ -429,7 +475,7 @@ pipeline_server <- function(id) {
           # Submit the job using the new script name.
           submit_output <- system2(
             "qsub",
-            args = basename(script_path),
+            args = shQuote(script_path),
             stdout = TRUE,
             stderr = TRUE
           )
@@ -440,7 +486,7 @@ pipeline_server <- function(id) {
               text = paste0(
                 submit_output,
                 ". You can monitor your job on Hydra with the `qstat` command or see `",
-                paste0(base_filename, ".log"),
+                paste0(".runs/logs/", base_filename, ".log"),
                 "` in your project directory"
               ),
               type = "success"
@@ -457,22 +503,17 @@ pipeline_server <- function(id) {
         })
       } else if (is_sedna_cluster) {
         tryCatch({
-          work_dir <- dirname(getOption("MitoPilot.db") %||% ".")
+          work_dir <- normalizePath(dirname(getOption("MitoPilot.db") %||% "."))
           # nf_cmd() is reactive; read it via isolate() since this deferred
           # callback runs outside a reactive context.
           full_nf_cmd <- paste(c("nextflow", shiny::isolate(nf_cmd())), collapse = " ")
 
-          # 1. Create a timestamp and a workflow label ("assemble" or "annotate").
-          timestamp <- format(Sys.time(), "%Y-%m-%d_%H-%M-%S")
-          workflow_label <- tolower(session$userData$mode)
-
-          # 2. Combine them for a unique base filename.
-          base_filename <- paste(workflow_label, timestamp, sep = "_")
-
-          # 3. Define the job name, log file path, and script path using the base filename.
+          base_filename <- shiny::isolate(run_base())
           job_name <- base_filename
-          log_file_path <- file.path(work_dir, paste0(base_filename, ".log"))
-          script_path <- file.path(work_dir, paste0(base_filename, ".sh"))
+          log_file_path <- file.path(run_dir(work_dir, "logs"), paste0(base_filename, ".log"))
+          script_path <- file.path(run_dir(work_dir, "jobs"), paste0(base_filename, ".sh"))
+          dir.create(dirname(log_file_path), recursive = TRUE, showWarnings = FALSE)
+          dir.create(dirname(script_path), recursive = TRUE, showWarnings = FALSE)
 
           script_content <- c(
             "#!/bin/sh",
@@ -494,11 +535,13 @@ pipeline_server <- function(id) {
             "",
             # Pin the Nextflow engine to a MitoPilot-compatible version.
             if (!is.na(nf_pin_version())) paste0("export NXF_VER=", nf_pin_version()),
-            full_nf_cmd,
+            paste("cd", shQuote(work_dir, type = "sh"), "&&", full_nf_cmd),
+            nf_exit_trailer()[1:2],
             "",
             'echo "---"',
             'echo = `date` job $SLURM_JOB_NAME done',
-            'echo "---"'
+            'echo "---"',
+            nf_exit_trailer()[3]
           )
 
           # Write the script to the unique, timestamped file path.
@@ -507,7 +550,7 @@ pipeline_server <- function(id) {
           # Submit the job using the new script name.
           submit_output <- system2(
             "sbatch",
-            args = basename(script_path),
+            args = shQuote(script_path),
             stdout = TRUE,
             stderr = TRUE
           )
@@ -519,7 +562,7 @@ pipeline_server <- function(id) {
                 "Job ID: ",
                 submit_output,
                 ". You can monitor your job on SEDNA with the `squeue` command or see `",
-                paste0(base_filename, ".out"),
+                paste0(".runs/logs/", base_filename, ".log"),
                 "` in your project directory"
               ),
               type = "success"
@@ -652,6 +695,7 @@ pipeline_server <- function(id) {
         # Board is upserted live, so the final read leaves it already correct.
         apply_progress(p$read_output_lines())
         process(NULL)
+        end_run(p)
         shinyjs::hide("stop")
         shinyjs::show("start_button_ui") # Show the button container again
         shinyjs::addClass("gears", "paused")
@@ -675,9 +719,8 @@ pipeline_server <- function(id) {
 
     # Stop ----
     observeEvent(input$stop, {
-      if (!is.null(process()) && process()$is_alive()) {
-        process()$kill()
-      }
+      p <- process()
+      if (!is.null(p)) end_run(p, if (p$is_alive()) "stopped")
       process(NULL)
       shinyjs::hide("stop")
       shinyjs::show("start_button_ui") # Also show the buttons if stopped manually
@@ -687,9 +730,8 @@ pipeline_server <- function(id) {
 
     # Close modal ----
     observeEvent(input$close, {
-      if (!is.null(process()) && process()$is_alive()) {
-        process()$kill()
-      }
+      p <- process()
+      if (!is.null(p)) end_run(p, if (p$is_alive()) "stopped")
       process(NULL)
       removeModal()
     })

@@ -16,19 +16,43 @@
   paste(utils::head(w, 2), collapse = " ")
 }
 
+# GBIF datasets built from sequence databases, not museum catalogs
+.gbif_derived_datasets <- c("d8cd16ba-bb74-4420-821e-083f2bac17c2",   # INSDC Sequences
+                            "040c5662-da76-4782-a48e-cdea1892d14c")   # iBOL
+
+# Darwin Core triplet "INST:COLL:CAT", doublet "INST:CAT", or "INST CAT"
+.voucher_pattern <- "^(urn:catalog:)?[^:/ ]+:.+$|^[A-Za-z]{2,8}[ -]+[A-Za-z]{0,4}[0-9][A-Za-z0-9.-]*$"
+
+.parse_voucher <- function(voucher) {
+  v <- trimws(strsplit(voucher, "|", fixed = TRUE)[[1]][1])
+  v <- trimws(sub("^urn:catalog:", "", v, ignore.case = TRUE))
+  if (grepl("^[a-z]+://|ark:/", v, ignore.case = TRUE)) return(NULL)
+  if (grepl(":", v, fixed = TRUE)) {
+    p <- trimws(strsplit(v, ":", fixed = TRUE)[[1]])
+    if (length(p) < 2 || !nzchar(p[1]) || !nzchar(p[length(p)])) return(NULL)
+    return(list(inst = p[1], cat = p[length(p)],
+                coll = if (length(p) >= 3 && nzchar(p[2])) p[2] else NA_character_))
+  }
+  m <- regmatches(v, regexec("^([A-Za-z]{2,8})[ -]+([A-Za-z]{0,4}[0-9][A-Za-z0-9.-]*)$", v))[[1]]
+  if (!length(m)) return(NULL)
+  list(inst = m[2], cat = m[3], coll = NA_character_)
+}
+
 .gbif_find_voucher <- function(voucher, taxon) {
-  if (grepl("^[a-z]+://", voucher, ignore.case = TRUE)) return(NULL)
-  p <- trimws(strsplit(voucher, ":", fixed = TRUE)[[1]])
-  if (length(p) < 2 || !nzchar(p[1]) || !nzchar(p[length(p)])) return(NULL)
-  inst <- p[1]
-  cat <- p[length(p)]
-  coll <- if (length(p) >= 3 && nzchar(p[2])) p[2] else NA_character_
+  p <- .parse_voucher(voucher)
+  if (is.null(p)) return(NULL)
+  inst <- p$inst
+  cat <- p$cat
+  coll <- p$coll
   want <- .link_species(taxon)
   genus_only <- !grepl(" ", want, fixed = TRUE)
   enc <- function(x) utils::URLencode(x, reserved = TRUE)
-  queries <- c(paste0("occurrenceID=", enc(cat)),
-               paste0("catalogNumber=", enc(paste(inst, cat))),
-               paste0("catalogNumber=", enc(cat), "&institutionCode=", enc(inst)))
+  forms <- unique(c(if (!is.na(coll)) paste(inst, coll, cat, sep = ":"), paste0(inst, ":", cat),
+                    paste(inst, cat)))
+  queries <- c(paste(paste0("catalogNumber=", enc(forms)), collapse = "&"),
+               paste0("catalogNumber=", enc(cat), "&institutionCode=", enc(inst)),
+               paste0("occurrenceID=", enc(cat)))
+  fld <- function(res, f) tolower(vapply(res, function(r) r[[f]] %||% "", ""))
   for (qi in seq_along(queries)) {
     got <- tryCatch(.gbif_get(paste0("occurrence/search?limit=50&", queries[qi])), error = function(e) NULL)
     res <- got$results
@@ -36,18 +60,21 @@
     if ((got$count %||% 0) > length(res)) {
       return(list(note = paste0("too many GBIF matches for ", voucher, "; not linked")))
     }
-    if (qi == 1L) {
-      res <- res[tolower(vapply(res, function(r) r$institutionCode %||% "", "")) == tolower(inst)]
-      if (!length(res)) next
+    res <- res[!fld(res, "datasetKey") %in% .gbif_derived_datasets &
+               !startsWith(fld(res, "institutionCode"), "mined from genbank")]
+    if (qi == 3L) {
+      res <- res[fld(res, "institutionCode") == tolower(inst) |
+                 grepl(paste0(":", tolower(inst), ":"), fld(res, "occurrenceID"), fixed = TRUE)]
     }
-    sp <- vapply(res, function(r) .link_species(r$scientificName %||% ""), "")
-    keep <- if (genus_only) sub(" .*", "", sp) == want else sp == want
-    if (!is.na(coll)) {
-      keep <- keep & tolower(vapply(res, function(r) r$collectionCode %||% "", "")) == tolower(coll)
-    }
-    res <- res[keep]
     if (!length(res)) next
-    spec <- vapply(res, function(r) identical(r$basisOfRecord, "PRESERVED_SPECIMEN"), logical(1))
+    sp <- vapply(res, function(r) .link_species(r$scientificName %||% ""), "")
+    res <- res[if (genus_only) sub(" .*", "", sp) == want else sp == want]
+    if (!length(res)) next
+    if (!is.na(coll)) {
+      same <- fld(res, "collectionCode") == tolower(coll)
+      if (any(same)) res <- res[same]
+    }
+    spec <- fld(res, "basisOfRecord") == "preserved_specimen"
     if (any(spec)) res <- res[spec]
     if (length(res) == 1L) return(list(ref = .meta_chr(res[[1]]$key), via = voucher))
     return(list(note = paste0(length(res), " possible GBIF matches for ", voucher, "; not linked")))
@@ -70,8 +97,14 @@
   ezid <- "ark:/65665/3[0-9a-fA-F-]+"
   geome <- "ark:/21547/[A-Za-z0-9._~:-]+"
   voucher_link <- function(fields, level = NULL) {
-    h <- .link_first(recs, fields, "^[^:]+:.+$", level)
-    if (is.null(h)) return(NULL)
+    h <- .link_first(recs, fields, .voucher_pattern, level)
+    if (is.null(h)) {
+      # bare museum catalog number plus a short institution code
+      inst <- .link_first(recs, c("institutionID", "institutionCode"), "^[A-Za-z]{2,8}$", level)
+      cat <- .link_first(recs, c("voucherCatalogNumber", "catalogNumber"), "^[A-Za-z]{0,4}[0-9][A-Za-z0-9.-]*$", level)
+      if (is.null(inst) || is.null(cat)) return(NULL)
+      h <- list(value = paste0(inst$value, ":", cat$value), field = cat$field, level = cat$level)
+    }
     v <- tryCatch(.gbif_find_voucher(h$value, taxon), error = function(e) NULL)
     if (!is.null(v$ref)) v$via <- paste(lab(h), v$via)
     v
@@ -81,7 +114,8 @@
     if (!is.null(h)) out$GEOME <- list(ref = h$value, via = lab(h))
     h <- .link_first(recs, c("voucherURI", "catalogNumber"), ezid, "BioSample")
     out$GBIF <- if (!is.null(h)) list(ref = h$value, via = lab(h)) else if ("GBIF" %in% want)
-      voucher_link(c("specimen_voucher", "genbankSpecimenVoucher"), "BioSample")
+      voucher_link(c("specimen_voucher", "genbankSpecimenVoucher", "materialSampleID",
+                     "voucherCatalogNumber", "bio_material"), "BioSample")
   }
   if (source == "GEOME" && nrow(recs)) {
     t <- recs[recs$depth == min(recs$depth), , drop = FALSE]
@@ -90,7 +124,8 @@
     if (!is.na(bs)) out$NCBI <- list(ref = bs, via = paste("GEOME", t$level[1], "sequencing record"))
     h <- .link_first(recs, c("voucherURI", "catalogNumber"), ezid)
     out$GBIF <- if (!is.null(h)) list(ref = h$value, via = lab(h)) else if ("GBIF" %in% want)
-      voucher_link(c("genbankSpecimenVoucher", "materialSampleID"))
+      voucher_link(c("genbankSpecimenVoucher", "materialSampleID", "voucherCatalogNumber",
+                     "otherCatalogNumbers", "catalogNumber"))
   }
   if (source == "GBIF") {
     h <- .link_first(recs, "associatedSequences", "SAM(N|EA|D)[0-9]+", "Occurrence") %||%
@@ -153,7 +188,7 @@
           DBI::dbExecute(con, paste0("UPDATE samples SET ", col, " = ? WHERE ID = ?"), params = list(ref, id))
           DBI::dbExecute(con, "INSERT OR REPLACE INTO meta_links VALUES (?, ?, ?, ?, NULL)",
                          params = list(id, tgt, ref, cand$via))
-          if (!tgt %in% done) suppressWarnings(.meta_fetch_into(con, tgt, id, ref, caches[[tgt]]))
+          if (!tgt %in% done) suppressWarnings(.meta_fetch_into(con, tgt, id, ref, caches[[tgt]], verbose = FALSE))
         } else if (cur != ref && !.meta_link_same(con, id, tgt, ref)) {
           if (linked) {
             DBI::dbExecute(con, "UPDATE meta_links SET note = ? WHERE ID = ? AND source = ?", params = list(
