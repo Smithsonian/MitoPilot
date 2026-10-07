@@ -555,51 +555,47 @@ NMNH requires every GenBank record to carry the specimen's Darwin Core voucher
 and its EZID, for example
 `[specimen_voucher=USNM:FISH:487075] [voucherURI=http://n2t.net/ark:/65665/30f303846-9d23-4069-881e-e43ff718ef9f]`.
 Tick **NMNH user** in the Export Data window to add both modifiers to the header
-template (and to the gene header when genes are exported). Untick it to take
-them out. If the template already has a `specimen_voucher` or `voucherURI`
-modifier, MitoPilot asks before replacing it. The switch follows the header
-template: picking a template saved with NMNH user on turns it on, and one
-without turns it off. The project remembers the last template you picked and
-the switch, so the Export Data window opens the way you left it.
+template (and to the gene header when genes are exported). If the template already has a `specimen_voucher` or `voucherURI`
+modifier, MitoPilot asks before replacing it. 
 
-Values are filled per sample, first valid one wins: the mapping-file columns
-picked under **Optional: take these from mapping file columns** (**Catalog
-number column** and **Specimen link column**), then the linked GBIF
-record, then NCBI, then GEOME. A voucher with no URI is looked up in GBIF, and a
-URI with no voucher takes the voucher of its GBIF record. MitoPilot then:
+Values are filled per sample, first valid one wins, You can specify the mapping-file columns
+for each value under **Optional: take these from mapping file columns**. MitoPilot will first
+attempt to fill in the values from the mapping file, then the linked GBIF
+record, then NCBI, then GEOME. A voucher number with no EZID is looked up in GBIF. Likewise,
+an EZID with no voucher number searches GBIF for the corresponding voucher number. MitoPilot then:
 
 - accepts `USNM:<collection>:<catalog>` with the NCBI collection codes `FISH`,
   `Birds`, `MAMM`, `Herp`, `IZ`, `ENT`, `Botany`, or `US:<catalog>`, and fixes
-  case and repeated `USNM` prefixes; `USNM:LAB` tissue numbers are rejected;
-- writes every EZID as `http://n2t.net/ark:/65665/3...`, and asks GBIF that it
-  is a specimen: a tissue EZID is replaced with its parent specimen, and the
-  voucher must match the GBIF record. Answers are cached in the project;
-  **Re-check with GBIF** asks again.
+  case and repeated `USNM` prefixes
+- writes every EZID as `http://n2t.net/ark:/65665/3...` and checks GBIF to 
+  ensure the EZID is for a specimen. A tissue EZID is replaced with its parent specimen, and the
+  voucher must match the GBIF record
 
 ![NMNH user ticked: where each value comes from and how many samples need attention](figures/nmnh_card.png)
 
 The status line in the NMNH user box shows how many samples need attention,
 with **Review and fix**, or "All N samples ready" with **Review NMNH values**.
-Either opens the **NMNH voucher report**:
+Either opens the **NMNH voucher report**, which lists every sample in the
+export group in two tables: **Need attention or marked Not NMNH**, and **Pass
+the NMNH check**, which shows each passing sample's `specimen_voucher` and
+`voucherURI` with where each came from. An **Auto-fixed** column marks samples
+where MitoPilot corrected a value's format or replaced a tissue link with its
+specimen. The line under each cell gives the result and where the value came
+from; click its **?** for the full details, such as what was changed or skipped.
+Both tables are edited the same way:
 
 - Type a fix into a cell. It is checked when you leave the cell and saved with
   the project's NMNH values; your mapping file is not changed. Clear a cell to go
   back to the automatic value.
 - Pick a field under a cell to take that sample's value from another
   mapping-file column or metadata field, or **None** to leave the modifier out.
-  **Choose fields** adds metadata fields to the list.
-- Tick **Not NMNH** for samples that are not NMNH specimens (**Select all** and
-  **Clear all** tick every row). Their values are used as found, without NMNH
-  checks, and they stay in the report so you can untick them.
+- Tick **Not NMNH** for samples that are not NMNH specimens. These samples will skip 
+  the voucher and EZID checks.
 - Click a sample ID to open its metadata viewer; **Back to voucher report**
   returns to the report.
 - **Download CSV for bulk edit**, edit it, then **Upload edited CSV**.
 
 ![NMNH voucher report with a typed voucher, missing values, and a sample marked Not NMNH](figures/nmnh_voucher_report.png)
-
-Exporting with problems asks first, in a "NMNH values missing or wrong" dialog,
-and an empty `[specimen_voucher=]` or `[voucherURI=]` is left out of the
-header.
 
 ### The conflict warning at export
 

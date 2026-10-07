@@ -326,6 +326,18 @@ nmnh_source_label <- function(src) {
   out
 }
 
+# Short name of where a value came from, for the voucher report status lines
+nmnh_source_short <- function(src) {
+  out <- src
+  m <- !is.na(src) & startsWith(src, "mapfile:")
+  out[m] <- substring(src[m], 9)
+  f <- !is.na(src) & startsWith(src, "field:")
+  out[f] <- sub("^Mapping file: ", "", .nmnh_key_label(substring(src[f], 7)))
+  out[src %in% "entered"] <- "typed"
+  out[src %in% "upload"] <- "CSV upload"
+  out
+}
+
 nmnh_resolve <- function(con, ids, cols = nmnh_columns(con), online = TRUE, save = TRUE) {
   .meta_ensure_tables(con)
   .nmnh_ensure_table(con)
