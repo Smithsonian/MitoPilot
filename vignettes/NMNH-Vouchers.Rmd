@@ -28,6 +28,8 @@ specimen voucher and the specimen's EZID in the following format:
 [specimen_voucher=USNM:FISH:487075] [voucherURI=http://n2t.net/ark:/65665/30f303846-9d23-4069-881e-e43ff718ef9f]
 ```
 
+Not sure how to find the specimen EZIDs for your samples? Consult with your department's data manager.
+
 <div class="alert alert-note">
 <code>specimen_voucher</code> is a standard GenBank source modifier.
 <code>voucherURI</code> is an NMNH requirement and is not on GenBank's list of
