@@ -226,7 +226,7 @@ Create, migrate, edit, and export the project SQLite database.
   : Fetch GEOME metadata for project samples
 - [`fetch_gbif()`](https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.md)
   : Fetch GBIF occurrence metadata for project samples
-- [`fetch_biosample()`](https://smithsonian.github.io/MitoPilot/reference/fetch_biosample.md)
+- [`fetch_ncbi()`](https://smithsonian.github.io/MitoPilot/reference/fetch_ncbi.md)
   : Fetch NCBI BioSample and BioProject metadata for project samples
 - [`remove_metadata()`](https://smithsonian.github.io/MitoPilot/reference/remove_metadata.md)
   : Remove fetched GEOME, GBIF, and NCBI metadata
@@ -600,8 +600,6 @@ Called by the Nextflow workflows. Not intended for direct use.
 
 - [Starting Your Own
   Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.md):
-- [Sample metadata: GEOME, GBIF, and
-  NCBI](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.md):
 - [Using Your Own
   Assemblies](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Assemblies.md):
 - [Choosing an Assembly
@@ -614,6 +612,17 @@ Called by the Nextflow workflows. Not intended for direct use.
   Validation](https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.md):
 - [Building Custom
   Databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md):
+
+### Metadata
+
+- [Sample metadata: GEOME, GBIF, and
+  NCBI](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.md):
+- [Linking records across
+  databases](https://smithsonian.github.io/MitoPilot/articles/Metadata-Linking.md):
+- [NMNH voucher
+  submissions](https://smithsonian.github.io/MitoPilot/articles/NMNH-Vouchers.md):
+- [Metadata field
+  reference](https://smithsonian.github.io/MitoPilot/articles/Metadata-Reference.md):
 
 ### Computing Environments
 

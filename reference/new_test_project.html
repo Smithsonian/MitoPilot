@@ -11,7 +11,7 @@ project for faster set up."><meta property="og:image" content="https://smithsoni
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -34,13 +34,18 @@ project for faster set up."><meta property="og:image" content="https://smithsoni
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
-    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Metadata</h6></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Linking.html">Linking records across databases</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Vouchers.html">NMNH voucher submissions</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Reference.html">Metadata field reference</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
@@ -83,6 +88,7 @@ project for faster set up.</p>
 <span>  container <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"macguigand/mitopilot:"</span>, <span class="fu">utils</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/utils/packageDescription.html" class="external-link">packageVersion</a></span><span class="op">(</span><span class="st">"MitoPilot"</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  Rproj <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  force <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  fetch_metadata <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -128,6 +134,13 @@ interactively in RStudio.</p></dd>
 <dt id="arg-force">force<a class="anchor" aria-label="anchor" href="#arg-force"></a></dt>
 <dd><p>(logical) Force recreating of existing project database and
 config files (default = FALSE).</p></dd>
+
+
+<dt id="arg-fetch-metadata">fetch_metadata<a class="anchor" aria-label="anchor" href="#arg-fetch-metadata"></a></dt>
+<dd><p>(logical) Fetch each sample's NCBI metadata (synthetic samples use
+their source run's) and
+follow links to GBIF and GEOME (default = TRUE). Linking is saved as the
+project setting. Set FALSE when offline.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

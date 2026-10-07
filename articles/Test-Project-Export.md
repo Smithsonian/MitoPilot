@@ -78,8 +78,11 @@ header for GenBank to parse it correctly. Second, `{seqid}` takes the
 value in the ID column of the mapping file and appends the scaffold/path
 number if that sample is exporting multiple sequences.
 
-Templates are validated as you type and can be saved by name with **Save
-template** for reuse.
+Templates are validated as you type, and the **Preview** under each
+header box shows the header for the first record of the group. Click a
+column in the **Available metadata** panel on the right to insert it
+into the header box you last clicked. Save a template by name with
+**Save template** for reuse.
 
 **Tip.** Samples linked to GEOME, GBIF, or NCBI records can also use
 `{geome_...}`, `{gbif_...}`, and `{ncbi_...}` columns in the header,
@@ -97,6 +100,9 @@ Other options in the Export Data window:
   for phylogenetics or single-gene submissions.
 - **Review PCG annotations for outliers** runs a final pre-submission
   check described below.
+- **NMNH user** adds the specimen voucher and EZID modifiers that
+  Smithsonian NMNH records need, and checks them. See [NMNH voucher
+  submissions](https://smithsonian.github.io/MitoPilot/articles/NMNH-Vouchers.md).
 
 Then click **Export**.
 
@@ -146,7 +152,7 @@ During export, files are saved to `<project>/out/export/<group name>/`:
 |----|----|
 | `<group>.fasta` | The mitogenome sequences with your header template applied |
 | `<group>.tbl` | The [five-column feature table](https://www.ncbi.nlm.nih.gov/genbank/feature_table/) of annotations |
-| `<group>_sample_info.csv` | The sample metadata behind the submission, including a `ref_comparison` column naming the GenBank reference each annotation was compared to |
+| `<group>_sample_info.csv` | The sample metadata behind the submission, including a `ref_accession` column with the accession of the GenBank reference each annotation was compared to |
 | `AA_alignments_<group>.html` | The group-level protein alignment report |
 | `GFFs/` | One [GFF3](https://gmod.org/wiki/GFF3) per sample, can be reviewed using Geneious or other tools |
 | `genes/` | Per-gene FASTA and feature tables, if you asked for them |

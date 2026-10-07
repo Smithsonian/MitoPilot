@@ -32,7 +32,7 @@ Create, migrate, edit, and export the project SQLite database.
   : Fetch GEOME metadata for project samples
 - [`fetch_gbif()`](https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.md)
   : Fetch GBIF occurrence metadata for project samples
-- [`fetch_biosample()`](https://smithsonian.github.io/MitoPilot/reference/fetch_biosample.md)
+- [`fetch_ncbi()`](https://smithsonian.github.io/MitoPilot/reference/fetch_ncbi.md)
   : Fetch NCBI BioSample and BioProject metadata for project samples
 - [`remove_metadata()`](https://smithsonian.github.io/MitoPilot/reference/remove_metadata.md)
   : Remove fetched GEOME, GBIF, and NCBI metadata

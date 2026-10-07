@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,13 +30,18 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
-    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Metadata</h6></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Linking.html">Linking records across databases</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Vouchers.html">NMNH voucher submissions</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Reference.html">Metadata field reference</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
@@ -77,8 +82,8 @@
 <span>  fetch_geome <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  mapping_gbif <span class="op">=</span> <span class="st">"GBIF_ID"</span>,</span>
 <span>  fetch_gbif <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  mapping_biosample <span class="op">=</span> <span class="st">"BioSample"</span>,</span>
-<span>  fetch_biosample <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  mapping_ncbi <span class="op">=</span> <span class="st">"BioSample"</span>,</span>
+<span>  fetch_ncbi <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  link_sources <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  data_path <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  min_depth <span class="op">=</span> <span class="fl">2e+06</span>,</span>
@@ -149,17 +154,17 @@ Passed to `new_db()`.</p></dd>
 Passed to `new_db()`.</p></dd>
 
 
-<dt id="arg-mapping-biosample">mapping_biosample<a class="anchor" aria-label="anchor" href="#arg-mapping-biosample"></a></dt>
+<dt id="arg-mapping-ncbi">mapping_ncbi<a class="anchor" aria-label="anchor" href="#arg-mapping-ncbi"></a></dt>
 <dd><p>Name of the mapping-file column holding NCBI
 BioSample or SRA accessions (optional). Must not be the sample ID column.
 Stored as `BioSample`. See `vignette("Specimen-Metadata")`.
 Passed to `new_db()`.</p></dd>
 
 
-<dt id="arg-fetch-biosample">fetch_biosample<a class="anchor" aria-label="anchor" href="#arg-fetch-biosample"></a></dt>
+<dt id="arg-fetch-ncbi">fetch_ncbi<a class="anchor" aria-label="anchor" href="#arg-fetch-ncbi"></a></dt>
 <dd><p>Fetch NCBI metadata for samples with a BioSample
 value during setup (default TRUE). Set FALSE when offline and run
-[fetch_biosample()] later.
+[fetch_ncbi()] later.
 Passed to `new_db()`.</p></dd>
 
 

@@ -67,19 +67,22 @@ An RStudio Server session on Hydra starts with a stripped `PATH` that
 leaves out the job scheduler, Java, and your `~/bin`, so Nextflow cannot
 find `qsub` and job submission fails.
 [`hydra_setup()`](https://smithsonian.github.io/MitoPilot/reference/hydra_setup.md)
-fixes that. Call it once per session, right after loading the package
-and before creating a project or opening the app:
+fixes that, and MitoPilot runs it for you when you load the package and
+when you open the app:
 
 ``` r
 
 library(MitoPilot)
-hydra_setup()
 ```
 
 It puts the Hydra Java and job scheduler directories at the front of
 your `PATH`, checks your Nextflow version, and pins a compatible one for
-the session. It warns and changes nothing if you are not on Hydra, so it
-is safe to leave in a script you also run elsewhere.
+the session. If you use `MitoPilot::` functions without
+[`library(MitoPilot)`](https://github.com/Smithsonian/MitoPilot), or the
+setup message does not appear, call
+[`hydra_setup()`](https://smithsonian.github.io/MitoPilot/reference/hydra_setup.md)
+yourself. It warns and changes nothing if you are not on Hydra, so it is
+safe to leave in a script you also run elsewhere.
 
 ## Create projects with the Hydra executor
 

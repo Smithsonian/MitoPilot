@@ -35,11 +35,11 @@ To link samples to [GEOME](https://geome-db.org) records,
 BioSamples](https://www.ncbi.nlm.nih.gov/biosample), add a column of
 GEOME BCIDs, gbifIDs (Smithsonian NMNH EZIDs work there too), or
 BioSample/SRA accessions, and name those columns with the
-`mapping_geome`, `mapping_gbif`, and `mapping_biosample` arguments of
+`mapping_geome`, `mapping_gbif`, and `mapping_ncbi` arguments of
 [`new_project()`](https://smithsonian.github.io/MitoPilot/reference/new_project.md).
 Add `link_sources = TRUE` to fill in the other databases from whichever
-ID you have; see [Sample
-metadata](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.md).
+ID you have; see [Linking records across
+databases](https://smithsonian.github.io/MitoPilot/articles/Metadata-Linking.md).
 
     ID,Taxon,R1,R2,Voucher,BioSample
     OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN00000001
@@ -165,7 +165,7 @@ support](https://smithsonian.github.io/MitoPilot/articles/Custom-HPC.md).
 **`ncbi_api_key`** raises your NCBI request limits. Worth setting even
 though the BLAST search itself is local, because MitoPilot fetches
 annotations and taxonomic lineage for each BLAST hit directly from NCBI.
-Get an API key from
+Sample metadata fetches use it too. Get an API key from
 [NCBI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/).
 
 ##### Any other pipeline parameter
@@ -224,13 +224,12 @@ analyzing hundreds. Curation settings that are wrong for your clade are
 much cheaper to discover on a small test run.
 
 HYDRA **A Hydra project in full.** Keep the data and the project on
-`/pool` or `/scratch` (not `/store`), and call
-[`hydra_setup()`](https://smithsonian.github.io/MitoPilot/reference/hydra_setup.md)
-before anything else in the session:
+`/pool` or `/scratch` (not `/store`).
+[`library(MitoPilot)`](https://github.com/Smithsonian/MitoPilot) sets up
+the Hydra environment for the session:
 
 ``` r
 library(MitoPilot)
-hydra_setup()
 
 new_project(
   path = "/pool/public/genomics/<<USER>>/octocorals/run_01",

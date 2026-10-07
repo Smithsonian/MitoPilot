@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -30,13 +30,18 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
-    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Metadata</h6></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Linking.html">Linking records across databases</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Vouchers.html">NMNH voucher submissions</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Reference.html">Metadata field reference</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
@@ -63,12 +68,68 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.5.9" id="mitopilot-159">MitoPilot 1.5.9<a class="anchor" aria-label="anchor" href="#mitopilot-159"></a></h2>
+<p>Released 2026-10-07. Container: <code>macguigand/mitopilot:1.5.9</code></p>
+<div class="section level3">
+<h3 id="breaking-changes-1-5-9">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-1-5-9"></a></h3>
+<ul><li>
+<strong>NCBI names.</strong> The NCBI setup arguments are now <code>mapping_ncbi</code> and <code>fetch_ncbi</code> (were <code>mapping_biosample</code> and <code>fetch_biosample</code>), since they take SRA accessions as well as BioSamples. <code>fetch_biosample()</code> is now <code><a href="../reference/fetch_ncbi.html">fetch_ncbi()</a></code>, and its <code>biosamples</code> argument is now <code>ncbi_ids</code>. The mapping-file column still defaults to <code>BioSample</code>, and existing projects need no changes.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-1-5-9">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5-9"></a></h3>
+<ul><li>
+<strong>Run reports.</strong> After every Assemble or Annotate run, MitoPilot writes a plain-language report: the result, task counts, failed tasks with a likely cause (for example, out of memory), and samples that failed with their notes. This works for runs started in the app and for runs submitted to a cluster or run in the background from a saved script. A “New run reports available” message appears when new reports are ready, and the <strong>Run Reports</strong> button (next to <strong>Work Dirs</strong>) lists every run for the active panel. Click a run to read its report, copy it, or open its folder. Runs still in progress show live task progress read from the Nextflow log.</li>
+<li>
+<strong>Tidier run files.</strong> Each run’s submission script, scheduler log, Nextflow log, and report now share one name and live under a hidden <code>.runs/</code> folder in the project, instead of loose files in the project folder. Older projects keep working; their existing logs stay where they are.</li>
+<li>
+<strong>Test projects come with sample metadata.</strong> <code><a href="../reference/new_test_project.html">new_test_project()</a></code> and <code><a href="../reference/new_test_project_userAsmb.html">new_test_project_userAsmb()</a></code> now fetch each sample’s NCBI metadata from its SRA run and follow links to GBIF and GEOME.</li>
+<li>
+<strong>One window for metadata fields.</strong> The <strong>Metadata</strong> button now picks both which metadata fields show as table columns (<strong>Show</strong>) and which can be used at export (<strong>Export</strong>), replacing the separate <strong>Set Export Metadata</strong> button. <strong>Tick both together</strong> sets both with one click, header boxes tick every row in view, <strong>GenBank-ready</strong> and <strong>Ticked only</strong> narrow the list, sample counts show gaps, and a click copies a field’s template text. <strong>Choose fields</strong> in Export Data opens the same window filtered to that source.</li>
+<li>
+<strong>Copy sequence in the sequence viewers.</strong> The Annotate sequence viewer and the MapToRef coverage viewer have a <strong>Copy sequence</strong> button that copies the bases currently in view as FASTA, at any zoom level. In MapToRef, the reference and consensus are copied as two records.</li>
+<li>
+<strong>NMNH user switch in Export Data.</strong> Adds the <code>[specimen_voucher=]</code> and <code>[voucherURI=]</code> modifiers NMNH requires on GenBank submissions, fills them per sample from your mapping file, GBIF, NCBI, or GEOME, checks the voucher codes and EZIDs (a tissue EZID is replaced with its parent specimen), and reports samples that are missing or wrong. Fix them in the report or with a CSV upload. See <code><a href="../articles/Specimen-Metadata.html">vignette("Specimen-Metadata")</a></code>.</li>
+<li>
+<strong>Sample metadata from the voucher report.</strong> Click a sample ID in the NMNH voucher report to open its metadata, then return to the report. The metadata window now has a copy button on every value and <strong>Export CSV</strong> to save all of a sample’s metadata.</li>
+<li>
+<strong>Non-NMNH samples and chosen fields in the voucher report.</strong> Tick <strong>Not NMNH</strong> for samples that are not NMNH specimens: their voucher and URI are used as found, without NMNH checks, and they stay in the report so you can untick them. For any sample, pick the mapping-file column or metadata field its <code>specimen_voucher</code> or <code>voucherURI</code> comes from (<strong>Choose fields</strong> adds more).</li>
+<li>
+<strong>NMNH user is remembered per project.</strong> Export Data opens with the switch as you last left it. The voucher report’s field lists are sorted and offer <strong>None</strong> to leave a modifier out.</li>
+<li>
+<strong>Hydra setup runs automatically.</strong> On the NMNH Hydra cluster, <code><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">library(MitoPilot)</a></code> and opening the app with <code><a href="../reference/MitoPilot.html">MitoPilot::MitoPilot()</a></code> run <code><a href="../reference/hydra_setup.html">hydra_setup()</a></code> when the job scheduler is not yet on <code>PATH</code>, so you no longer need to call it yourself.</li>
+<li>
+<strong>Empty source modifiers are left out of FASTA headers.</strong> When a sample has no value for a <code>[modifier={field}]</code> in the header template, that modifier is dropped from its header instead of being written empty or as <code>NA</code>.</li>
+<li>
+<strong>Redesigned Export Data window.</strong> Header templates and the available metadata sit side by side, each column scrolling on its own (stacked, with metadata in a bottom drawer, on narrow screens). Fields missing for some samples are underlined, and a live preview shows a real header example.</li>
+<li>
+<strong>Header checks catch more problems.</strong> Export warns when a header uses the same source modifier twice (NCBI accepts each once) and names header columns that are empty for some samples. Checks now look only at the chosen export group.</li>
+<li>
+<strong>BioSample and BioProject in FASTA headers.</strong> The NCBI BioSample and BioProject fields now insert <code>[BioSample=]</code> and <code>[BioProject=]</code> source modifiers. New <code>ncbi_biosample_sra</code> and <code>ncbi_bioproject_sra</code> fields hold the values from the SRA record when a sample was linked through an SRA accession.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="changes-1-5-9">Changes<a class="anchor" aria-label="anchor" href="#changes-1-5-9"></a></h3>
+<ul><li>
+<strong>Linking to GBIF by voucher now follows Darwin Core standards.</strong> When a GEOME or NCBI record has no Smithsonian EZID, MitoPilot searches GBIF for the specimen voucher in every field that can hold one (<code>specimen_voucher</code>, <code>genbankSpecimenVoucher</code>, <code>materialSampleID</code>, <code>voucherCatalogNumber</code>, <code>otherCatalogNumbers</code>, <code>bio_material</code>, or a bare catalog number with the institution code). It reads triplets, doublets, <code>urn:catalog:</code> prefixes, and <code>USNM 419933</code>-style spacing, no longer rejects the only match over a differing collection code, and skips GBIF occurrences copied from GenBank or BOLD.</li>
+<li>
+<code>geome_specimen_voucher</code> uses <code>genbankSpecimenVoucher</code> when GEOME has it, and <code>gbif_specimen_voucher</code> drops a catalog number’s leading repeat of the institution code.</li>
+<li>In the metadata viewer’s <strong>Compare</strong> tab, coordinates that match only within the 0.01 degree tolerance now show the status <strong>agree (rounding)</strong> instead of plain “agree”. The values shown are always the original stored values.</li>
+<li>The export’s <code>sample_info.csv</code> has a new <code>ref_accession</code> column holding just the GenBank reference accession (blank when the reference was flagged as poor). It replaces the <code>ref_comparison</code> column and its “compared sample … to GenBank accession …” sentence.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-1-5-9">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-5-9"></a></h3>
+<ul><li>NCBI metadata fetches ignored the project’s <code>ncbi_api_key</code> and the <code>NCBI_API_KEY</code> environment variable, reading only <code>ENTREZ_KEY</code>, so they ran at the slower keyless rate. They now use the same key as BLAST and reference fetches.</li>
+<li>Opening the app on a project with no extra mapping-file columns and no fetched GEOME, GBIF, or NCBI metadata (for example a fresh test project) failed with “replacement has 1 row, data has 0”.</li>
+</ul><p><strong>Note</strong> Run <a href="https://smithsonian.github.io/MitoPilot/reference/backwards_compatibility.html"><code>MitoPilot::backwards_compatibility()</code></a> on older projects to move the <code>container</code> line in <code>.config</code> to <code>macguigand/mitopilot:1.5.9</code>. Scripts that call <code>fetch_biosample()</code> or pass <code>mapping_biosample</code> or <code>fetch_biosample</code> need the new names.</p>
+<p><strong>Full Changelog</strong>: <a href="https://github.com/Smithsonian/MitoPilot/compare/1.5.8" class="external-link uri">https://github.com/Smithsonian/MitoPilot/compare/1.5.8</a>…1.5.9</p>
+</div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.5.8" id="mitopilot-158">MitoPilot 1.5.8<a class="anchor" aria-label="anchor" href="#mitopilot-158"></a></h2>
 <p>Released 2026-09-29. Container: <code>macguigand/mitopilot:1.5.8</code></p>
 <div class="section level3">
 <h3 id="new-features-1-5-8">New Features<a class="anchor" aria-label="anchor" href="#new-features-1-5-8"></a></h3>
 <ul><li>
-<strong>NCBI BioSample metadata.</strong> Samples can now be linked to an NCBI BioSample, directly or through an SRA accession (SRR, ERR, DRR, SRX, or SRS), with <code>mapping_biosample</code> at setup, <code><a href="../reference/fetch_biosample.html">fetch_biosample()</a></code>, or the new NCBI tab in the sample metadata viewer. MitoPilot stores every BioSample attribute plus the linked BioProjects, adds NCBI to the Compare tab and the export conflict warning, and offers GenBank-ready <code>ncbi_*</code> fields at export. See <a href="https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html">Sample metadata</a>.</li>
+<strong>NCBI BioSample metadata.</strong> Samples can now be linked to an NCBI BioSample, directly or through an SRA accession (SRR, ERR, DRR, SRX, or SRS), with <code>mapping_biosample</code> at setup, <code>fetch_biosample()</code>, or the new NCBI tab in the sample metadata viewer. MitoPilot stores every BioSample attribute plus the linked BioProjects, adds NCBI to the Compare tab and the export conflict warning, and offers GenBank-ready <code>ncbi_*</code> fields at export. See <a href="https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.html">Sample metadata</a>.</li>
 <li>
 <strong>Follow links between GEOME, GBIF, and NCBI.</strong> With <code>link_sources = TRUE</code> at setup (or <strong>Follow links between databases</strong> in the sample metadata viewer), each fetched record is read for IDs of the other databases, and missing ones are added and fetched: BioSample to GEOME tissue and Smithsonian voucher, GEOME to BioSample and voucher, GBIF to BioSample. Other museums’ vouchers are matched to GBIF by catalog number, and only linked when exactly one specimen of the right species is found. Your own IDs are never replaced, and every linked ID shows where it came from.</li>
 <li>

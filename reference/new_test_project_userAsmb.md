@@ -21,6 +21,7 @@ new_test_project_userAsmb(
   container = paste0("macguigand/mitopilot:", utils::packageVersion("MitoPilot")),
   Rproj = TRUE,
   force = FALSE,
+  fetch_metadata = TRUE,
   ...
 )
 ```
@@ -65,6 +66,13 @@ new_test_project_userAsmb(
 
   (logical) Force recreating of existing project database and config
   files (default = FALSE).
+
+- fetch_metadata:
+
+  (logical) Fetch each sample's NCBI metadata from its donor run (the
+  first donor for mixed samples) and follow links to GBIF and GEOME
+  (default = TRUE). Linking is saved as the project setting. Set FALSE
+  when offline.
 
 - ...:
 

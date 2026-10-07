@@ -26,7 +26,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">MitoPilot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.5.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -51,13 +51,18 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Usage</h6></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Project.html">Starting Your Own Project</a></li>
-    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
     <li><a class="dropdown-item" href="../articles/Your-Own-Assemblies.html">Using Your Own Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Assembly-Methods.html">Choosing an Assembly Method</a></li>
     <li><a class="dropdown-item" href="../articles/Difficult-Assemblies.html">Difficult Assemblies</a></li>
     <li><a class="dropdown-item" href="../articles/Ruleset-Browser.html">Curation Ruleset Browser</a></li>
     <li><a class="dropdown-item" href="../articles/Curation-and-Validation.html">Curation and Validation</a></li>
     <li><a class="dropdown-item" href="../articles/custom_dbs.html">Building Custom Databases</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Metadata</h6></li>
+    <li><a class="dropdown-item" href="../articles/Specimen-Metadata.html">Sample metadata: GEOME, GBIF, and NCBI</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Linking.html">Linking records across databases</a></li>
+    <li><a class="dropdown-item" href="../articles/NMNH-Vouchers.html">NMNH voucher submissions</a></li>
+    <li><a class="dropdown-item" href="../articles/Metadata-Reference.html">Metadata field reference</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Computing Environments</h6></li>
     <li><a class="dropdown-item" href="../articles/Custom-HPC.html">HPC Cluster Support</a></li>
@@ -250,10 +255,10 @@ collection data, and anything else your submission needs.</p>
 column of GEOME BCIDs, gbifIDs (Smithsonian NMNH EZIDs work there too),
 or BioSample/SRA accessions, and name those columns with the
 <code>mapping_geome</code>, <code>mapping_gbif</code>, and
-<code>mapping_biosample</code> arguments of <code><a href="../reference/new_project.html">new_project()</a></code>.
-Add <code>link_sources = TRUE</code> to fill in the other databases from
-whichever ID you have; see <a href="Specimen-Metadata.html">Sample
-metadata</a>.</p>
+<code>mapping_ncbi</code> arguments of <code><a href="../reference/new_project.html">new_project()</a></code>. Add
+<code>link_sources = TRUE</code> to fill in the other databases from
+whichever ID you have; see <a href="Metadata-Linking.html">Linking
+records across databases</a>.</p>
 <pre><code>ID,Taxon,R1,R2,Voucher,BioSample
 OCT001,Muricea elongata,OCT001_R1.fastq.gz,OCT001_R2.fastq.gz,USNM:1234567,SAMN00000001
 OCT002,Leptogorgia virgulata,OCT002_R1.fastq.gz,OCT002_R2.fastq.gz,USNM:1234568,SAMN00000002</code></pre>
@@ -360,7 +365,8 @@ saved yourself with <code><a href="../reference/generate_config.html">generate_c
 <p><strong><code>ncbi_api_key</code></strong> raises your NCBI request
 limits. Worth setting even though the BLAST search itself is local,
 because MitoPilot fetches annotations and taxonomic lineage for each
-BLAST hit directly from NCBI. Get an API key from <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">NCBI</a>.</p>
+BLAST hit directly from NCBI. Sample metadata fetches use it too. Get an
+API key from <a href="https://www.ncbi.nlm.nih.gov/datasets/docs/v2/api/api-keys/" class="external-link">NCBI</a>.</p>
 </div>
 <div class="section level5">
 <h5 id="any-other-pipeline-parameter">Any other pipeline parameter<a class="anchor" aria-label="anchor" href="#any-other-pipeline-parameter"></a>
@@ -410,10 +416,10 @@ your clade are much cheaper to discover on a small test run.</p>
 <div class="alert alert-hydra">
 <p><span class="hydra-tag">HYDRA</span> <strong>A Hydra project in
 full.</strong> Keep the data and the project on <code>/pool</code> or
-<code>/scratch</code> (not <code>/store</code>), and call
-<code><a href="../reference/hydra_setup.html">hydra_setup()</a></code> before anything else in the session:</p>
+<code>/scratch</code> (not <code>/store</code>).
+<code><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">library(MitoPilot)</a></code> sets up the Hydra environment for the
+session:</p>
 <pre><code class="r"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Smithsonian/MitoPilot" class="external-link">MitoPilot</a></span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/hydra_setup.html">hydra_setup</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/new_project.html">new_project</a></span><span class="op">(</span></span>
 <span>  path <span class="op">=</span> <span class="st">"/pool/public/genomics/&lt;&lt;USER&gt;&gt;/octocorals/run_01"</span>,</span>

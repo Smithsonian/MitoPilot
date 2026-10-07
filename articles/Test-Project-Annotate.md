@@ -132,11 +132,11 @@ anywhere in this plot to show a zoomed-in base-pair level alignment of
 your sample versus the reference.
 
 The reference mitogenome shown in this plot is recorded in the export’s
-`sample_info.csv` in the `ref_comparison` column, as “compared sample
-XXX to GenBank accession XXX”. It is not written to the FASTA headers.
-If the reference mitogenome is a poor match, you can flag it (the CSV
-column is then left blank) or use the dropdown menu to pick a better
-reference from among the top BLAST hits.
+`sample_info.csv` in the `ref_accession` column, as its GenBank
+accession number. It is not written to the FASTA headers. If the
+reference mitogenome is a poor match, you can flag it (the CSV column is
+then left blank) or use the dropdown menu to pick a better reference
+from among the top BLAST hits.
 
 ![Gene order compared against the closest GenBank
 reference](figures/get-started/annotate-synteny.png)

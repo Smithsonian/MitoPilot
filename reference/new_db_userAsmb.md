@@ -14,8 +14,8 @@ new_db_userAsmb(
   fetch_geome = TRUE,
   mapping_gbif = "GBIF_ID",
   fetch_gbif = TRUE,
-  mapping_biosample = "BioSample",
-  fetch_biosample = TRUE,
+  mapping_ncbi = "BioSample",
+  fetch_ncbi = TRUE,
   link_sources = FALSE,
   assembly_path = NULL,
   genetic_code = NULL,
@@ -107,17 +107,16 @@ new_db_userAsmb(
   Fetch GBIF metadata for samples with a GBIF ID during setup (default
   TRUE). Set FALSE when offline and run \[fetch_gbif()\] later.
 
-- mapping_biosample:
+- mapping_ncbi:
 
   Name of the mapping-file column holding NCBI BioSample or SRA
   accessions (optional). Must not be the sample ID column. Stored as
   \`BioSample\`. See \`vignette("Specimen-Metadata")\`.
 
-- fetch_biosample:
+- fetch_ncbi:
 
   Fetch NCBI metadata for samples with a BioSample value during setup
-  (default TRUE). Set FALSE when offline and run \[fetch_biosample()\]
-  later.
+  (default TRUE). Set FALSE when offline and run \[fetch_ncbi()\] later.
 
 - link_sources:
 

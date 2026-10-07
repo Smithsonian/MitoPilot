@@ -18,8 +18,6 @@
 
 - [Starting Your Own
   Project](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Project.md):
-- [Sample metadata: GEOME, GBIF, and
-  NCBI](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.md):
 - [Using Your Own
   Assemblies](https://smithsonian.github.io/MitoPilot/articles/Your-Own-Assemblies.md):
 - [Choosing an Assembly
@@ -32,6 +30,17 @@
   Validation](https://smithsonian.github.io/MitoPilot/articles/Curation-and-Validation.md):
 - [Building Custom
   Databases](https://smithsonian.github.io/MitoPilot/articles/custom_dbs.md):
+
+### Metadata
+
+- [Sample metadata: GEOME, GBIF, and
+  NCBI](https://smithsonian.github.io/MitoPilot/articles/Specimen-Metadata.md):
+- [Linking records across
+  databases](https://smithsonian.github.io/MitoPilot/articles/Metadata-Linking.md):
+- [NMNH voucher
+  submissions](https://smithsonian.github.io/MitoPilot/articles/NMNH-Vouchers.md):
+- [Metadata field
+  reference](https://smithsonian.github.io/MitoPilot/articles/Metadata-Reference.md):
 
 ### Computing Environments
 

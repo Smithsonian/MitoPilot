@@ -7,8 +7,11 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Difficult-Assemblies.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/FAQ.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Installation.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Metadata-Linking.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/Metadata-Reference.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/MitoPilot.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NMNH-Hydra.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/articles/NMNH-Vouchers.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/NOAA-SEDNA.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Native-Install.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/articles/Ruleset-Browser.html</loc></url>
@@ -75,11 +78,11 @@
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/custom_curation_db.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_db_to_csv.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/export_files.html</loc></url>
-<url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_biosample.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_ref.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_blast_refs.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_gbif.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_geome.html</loc></url>
+<url><loc>https://smithsonian.github.io/MitoPilot/reference/fetch_ncbi.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/find_mito.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/flag_PCG_outliers.html</loc></url>
 <url><loc>https://smithsonian.github.io/MitoPilot/reference/gbif_normalize_id.html</loc></url>
