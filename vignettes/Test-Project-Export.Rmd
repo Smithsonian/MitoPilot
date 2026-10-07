@@ -179,8 +179,10 @@ There are two special parameters. First, `{completeness}` expands to "complete g
 correctly. Second, `{seqid}` takes the value in the ID column of the mapping file and 
 appends the scaffold/path number if that sample is exporting multiple sequences.
 
-Templates are validated as you type and can be saved by name with
-**Save template** for reuse.
+Templates are validated as you type, and the **Preview** under each header box
+shows the header for the first record of the group. Click a column in the
+**Available metadata** panel on the right to insert it into the header box you
+last clicked. Save a template by name with **Save template** for reuse.
 
 <div class="alert alert-tip">
 <strong>Tip.</strong> Samples linked to GEOME, GBIF, or NCBI records can also use
@@ -197,6 +199,9 @@ Other options in the Export Data window:
   and feature tables, with their own header template. Useful for phylogenetics or
   single-gene submissions.
 - **Review PCG annotations for outliers** runs a final pre-submission check described below.
+- **NMNH user** adds the specimen voucher and EZID modifiers that Smithsonian
+  NMNH records need, and checks them. See
+  [NMNH submissions](Specimen-Metadata.html#nmnh-submissions).
 
 Then click **Export**.
 
