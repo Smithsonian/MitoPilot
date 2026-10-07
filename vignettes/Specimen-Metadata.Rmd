@@ -349,7 +349,9 @@ fetches every sample's GEOME, GBIF, and NCBI records again. Tick **Follow links
 between databases** to let fetches fill in IDs for the other databases (see
 [Resolving records across databases](#resolving-records-across-databases)).
 Type in the **Filter field names** box, to the right of the tabs, to show only
-the fields whose names match.
+the fields whose names match. Hover over a row and click its copy button to copy
+that value, and click **Export CSV** to save every metadata field for the sample
+(mapping-file columns and all fetched records) as one CSV file.
 
 On the **NCBI** tab, records are shown as SRA (when you gave an SRA accession),
 BioSample, and BioProject cards, each linked to its NCBI page.
@@ -521,7 +523,7 @@ Raw fields become columns named `geome_<Level>_<field>`,
 
 ### Adding columns to a header template
 
-The **Available columns** list in the Export Data window groups every column you
+The **Available metadata** panel in the Export Data window groups every column you
 can use: **Basics**, **Your mapfile columns**, **GEOME**, **GBIF**, **NCBI**,
 **Reference (BLAST)**, and **Assembly and annotation**. Click a column to insert it at the
 cursor of the header box you last clicked (the mitogenome FASTA header box if
@@ -529,7 +531,7 @@ you have not clicked one). A GenBank-ready combination inserts the whole source
 modifier, for example `[lat_lon={geome_lat_lon}]`. Hover over a column to see its
 value for the first row of any export group, and type in the filter box to
 find one. **Choose fields** next to GEOME, GBIF, or NCBI opens the Metadata fields
-window (this closes the Export Data window, so save your template first).
+window; closing it brings the Export Data window back as you left it.
 
 ![Export Data window with grouped column chips](figures/export_tokens.png)
 
@@ -539,12 +541,12 @@ A template using GEOME and GBIF fields:
 {seqid} [organism={Taxon}] [mgcode={genetic_code}] [location=mitochondrion] [lat_lon={gbif_lat_lon}] [collection_date={gbif_collection_date}] [geo_loc_name={geome_geo_loc_name}] [specimen_voucher={gbif_specimen_voucher}] {Taxon} mitochondrion, {completeness}
 ```
 
-<div class="alert alert-warning">
-<strong>Empty values stay in the header.</strong> If a sample has no value for
-a field, the header still gets the modifier with nothing after it, such as
-<code>[lat_lon=]</code>, which GenBank rejects. Only add a modifier to a template
-when every sample in the export group has a value for it. MitoPilot never
-changes your templates on its own.
+<div class="alert alert-info">
+<strong>Empty values are left out.</strong> If a sample has no value for a
+modifier, such as <code>[lat_lon={gbif_lat_lon}]</code>, that modifier is left
+out of the sample's header instead of being written empty, which GenBank
+rejects. The header check under the box warns which fields are missing for
+which samples. MitoPilot never changes your templates on its own.
 </div>
 
 ### NMNH submissions
@@ -554,11 +556,15 @@ and its EZID, for example
 `[specimen_voucher=USNM:FISH:487075] [voucherURI=http://n2t.net/ark:/65665/30f303846-9d23-4069-881e-e43ff718ef9f]`.
 Tick **NMNH user** in the Export Data window to add both modifiers to the header
 template (and to the gene header when genes are exported). Untick it to take
-them out. Saving the template saves the setting. If the template already has a
-`specimen_voucher` or `voucherURI` modifier, MitoPilot asks before replacing it.
+them out. If the template already has a `specimen_voucher` or `voucherURI`
+modifier, MitoPilot asks before replacing it. The switch follows the header
+template: picking a template saved with NMNH user on turns it on, and one
+without turns it off. The project remembers the last template you picked and
+the switch, so the Export Data window opens the way you left it.
 
 Values are filled per sample, first valid one wins: the mapping-file columns
-picked in **Voucher column** and **Voucher URI column**, then the linked GBIF
+picked under **Optional: take these from mapping file columns** (**Catalog
+number column** and **Specimen link column**), then the linked GBIF
 record, then NCBI, then GEOME. A voucher with no URI is looked up in GBIF, and a
 URI with no voucher takes the voucher of its GBIF record. MitoPilot then:
 
@@ -568,12 +574,31 @@ URI with no voucher takes the voucher of its GBIF record. MitoPilot then:
 - writes every EZID as `http://n2t.net/ark:/65665/3...`, and asks GBIF that it
   is a specimen: a tissue EZID is replaced with its parent specimen, and the
   voucher must match the GBIF record. Answers are cached in the project;
-  **Re-check** asks again.
+  **Re-check with GBIF** asks again.
 
-The line under the columns shows how many samples are ready. **View report**
-lists the problems; type a fix into a cell, or download the CSV, edit it, and
-upload it (this runs `update_sample_metadata()`). Exporting with problems asks
-first, and an empty `[specimen_voucher=]` or `[voucherURI=]` is left out of the
+![NMNH user ticked: where each value comes from and how many samples need attention](figures/nmnh_card.png)
+
+The status line in the NMNH user box shows how many samples need attention,
+with **Review and fix**, or "All N samples ready" with **Review NMNH values**.
+Either opens the **NMNH voucher report**:
+
+- Type a fix into a cell. It is checked when you leave the cell and saved with
+  the project's NMNH values; your mapping file is not changed. Clear a cell to go
+  back to the automatic value.
+- Pick a field under a cell to take that sample's value from another
+  mapping-file column or metadata field, or **None** to leave the modifier out.
+  **Choose fields** adds metadata fields to the list.
+- Tick **Not NMNH** for samples that are not NMNH specimens (**Select all** and
+  **Clear all** tick every row). Their values are used as found, without NMNH
+  checks, and they stay in the report so you can untick them.
+- Click a sample ID to open its metadata viewer; **Back to voucher report**
+  returns to the report.
+- **Download CSV for bulk edit**, edit it, then **Upload edited CSV**.
+
+![NMNH voucher report with a typed voucher, missing values, and a sample marked Not NMNH](figures/nmnh_voucher_report.png)
+
+Exporting with problems asks first, in a "NMNH values missing or wrong" dialog,
+and an empty `[specimen_voucher=]` or `[voucherURI=]` is left out of the
 header.
 
 ### The conflict warning at export
@@ -581,7 +606,7 @@ header.
 When you click **Export**, MitoPilot checks which items your header templates
 use: GEOME, GBIF, and NCBI combinations and raw fields, and mapping-file columns
 matched to an item (including `{Taxon}`). If any sample in the export group has
-a **conflict** on one of those items, a warning lists each sample, item, and the
+a **conflict** on one of those items, a "Sample metadata disagrees" warning lists each sample, item, and the
 differing values. Click **Export anyway** to continue or **Cancel** to go back
 and fix the data or the template. Items marked not checked never trigger the warning.
 
