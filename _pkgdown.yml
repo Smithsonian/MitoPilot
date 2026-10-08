@@ -29,22 +29,76 @@ navbar:
     right:
     - search
     - github
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: Setup
+      - text: "Installation and requirements"
+        href: articles/Installation.html
+      - text: -------
+      - text: Test project
+      - text: "1. Assemble"
+        href: articles/Test-Project-Assemble.html
+      - text: "2. Annotate"
+        href: articles/Test-Project-Annotate.html
+      - text: "3. Export"
+        href: articles/Test-Project-Export.html
+      - text: -------
+      - text: Usage
+      - text: "Starting your own project"
+        href: articles/Your-Own-Project.html
+      - text: "Using your own assemblies"
+        href: articles/Your-Own-Assemblies.html
+      - text: "Choosing an assembly method"
+        href: articles/Assembly-Methods.html
+      - text: "Difficult assemblies"
+        href: articles/Difficult-Assemblies.html
+      - text: "Curation ruleset browser"
+        href: articles/Ruleset-Browser.html
+      - text: "Curation and validation"
+        href: articles/Curation-and-Validation.html
+      - text: "Building custom databases"
+        href: articles/custom_dbs.html
+      - text: -------
+      - text: Metadata
+      - text: "Sample metadata"
+        href: articles/Specimen-Metadata.html
+      - text: "Linking records across databases"
+        href: articles/Metadata-Linking.html
+      - text: "NMNH voucher submissions"
+        href: articles/NMNH-Vouchers.html
+      - text: "Metadata field reference"
+        href: articles/Metadata-Reference.html
+      - text: -------
+      - text: Computing environments
+      - text: "HPC cluster support"
+        href: articles/Custom-HPC.html
+      - text: "Installing without containers"
+        href: articles/Native-Install.html
+      - text: "Smithsonian Hydra setup"
+        href: articles/NMNH-Hydra.html
+      - text: "NOAA SEDNA setup"
+        href: articles/NOAA-SEDNA.html
+      - text: -------
+      - text: Help
+      - text: "FAQ"
+        href: articles/FAQ.html
+      - text: "Troubleshooting"
+        href: articles/Troubleshooting.html
 
 articles:
 - title: "Setup"
-  navbar: Setup
   contents:
   - 'Installation'
 
 - title: "Test project walkthrough"
-  navbar: Test project
   contents:
   - 'Test-Project-Assemble'
   - 'Test-Project-Annotate'
   - 'Test-Project-Export'
 
 - title: "Usage"
-  navbar: Usage
   contents:
   - 'Your-Own-Project'
   - 'Your-Own-Assemblies'
@@ -55,7 +109,6 @@ articles:
   - 'custom_dbs'
 
 - title: "Metadata"
-  navbar: Metadata
   contents:
   - 'Specimen-Metadata'
   - 'Metadata-Linking'
@@ -63,7 +116,6 @@ articles:
   - 'Metadata-Reference'
 
 - title: "Computing Environments"
-  navbar: Computing Environments
   contents:
   - 'Custom-HPC'
   - 'Native-Install'
@@ -71,7 +123,6 @@ articles:
   - 'NOAA-SEDNA'
 
 - title: "Help"
-  navbar: Help
   contents:
   - 'FAQ'
   - 'Troubleshooting'

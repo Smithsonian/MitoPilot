@@ -48,3 +48,8 @@ table.clade-table code {
   padding: 0;
   background: none;
 }
+
+/* Let every Articles menu entry show. */
+.navbar .dropdown-menu {
+  max-height: calc(100vh - 120px);
+}
