@@ -3,6 +3,11 @@
 Please see the [documentation
 website](https://smithsonian.github.io/MitoPilot/) for more details.
 
+MitoPilot is a product of the [NMNH Ocean DNA
+initiative](https://naturalhistory.si.edu/initiatives/oceans/ocean-science-center/ocean-dna)
+and does not represent an official Smithsonian Institution position or
+product.
+
 # Overview
 
 MitoPilot is a package for the assembly and annotation of mitochondrial
