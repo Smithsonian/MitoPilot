@@ -94,8 +94,9 @@ published to GBIF cannot be matched.
 3.  **Did the voucher match several GBIF specimens?** The viewer says “N
     possible GBIF matches for …; not linked”. Paste the right gbifID.
 4.  **Does the record carry a link at all?** Open it in the viewer and
-    check the fields in the [table above](#what-mitopilot-follows). Many
-    records name no other database.
+    check the fields in the [table
+    above](#How-MitoPilot-links-database-records). Many records name no
+    other database.
 5.  **Did the linked fetch fail?** Hover the faded logo in the Metadata
     column, or see the [fetch
     messages](https://smithsonian.github.io/MitoPilot/articles/Metadata-Reference.html#fetch-messages).
