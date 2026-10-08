@@ -86,7 +86,7 @@ Related pages:
   identifier starting with `ark:/65665/`, in place of a gbifID. MitoPilot finds
   the matching GBIF occurrence, so the specimen must be on GBIF. EZIDs are more
   stable than gbifIDs. Links from `n2t.net` or `collections.nmnh.si.edu` work,
-  with or without dashes. Ask your 
+  with or without dashes.
 - **BioSample or SRA accession.** Copy the BioSample accession from
   [NCBI BioSample](https://www.ncbi.nlm.nih.gov/biosample), or use the [NCBI SRA](https://www.ncbi.nlm.nih.gov/sra)
   accession of your reads . For an SRA
